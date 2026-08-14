@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="适合亚马逊跨境卖家的 FBA 单件利润快速测算工具">
+  <title>亚马逊 FBA 利润计算器</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app-shell">
+    <header class="hero">
+      <div>
+        <span class="eyebrow">SELLER TOOLKIT</span>
+        <h1>亚马逊 FBA<br>利润计算器</h1>
+        <p>快速拆解单件商品的费用、利润率与投资回报，帮助你在选品和调价时做出更清晰的判断。</p>
+      </div>
+      <div class="hero-badge" aria-label="自动计算已开启"><span></span>自动计算</div>
+    </header>
+
+    <section class="calculator" aria-label="FBA利润计算器">
+      <form id="profit-form" class="input-panel">
+        <div class="section-heading">
+          <div><span>01</span><h2>成本与售价</h2></div>
+          <button type="reset" class="reset-button">恢复默认</button>
+        </div>
+        <div class="field-grid">
+          <label class="field"><span>销售单价</span><div class="input-wrap"><b>¥</b><input id="price" type="number" min="0" step="0.01" value="299" inputmode="decimal"></div></label>
+          <label class="field"><span>采购成本</span><div class="input-wrap"><b>¥</b><input id="purchase" type="number" min="0" step="0.01" value="72" inputmode="decimal"></div></label>
+          <label class="field"><span>国内运费</span><div class="input-wrap"><b>¥</b><input id="domestic" type="number" min="0" step="0.01" value="5" inputmode="decimal"></div></label>
+          <label class="field"><span>头程运费</span><div class="input-wrap"><b>¥</b><input id="firstLeg" type="number" min="0" step="0.01" value="24" inputmode="decimal"></div></label>
+          <label class="field"><span>关税</span><div class="input-wrap"><b>¥</b><input id="customs" type="number" min="0" step="0.01" value="8" inputmode="decimal"></div></label>
+          <label class="field"><span>FBA 配送费</span><div class="input-wrap"><b>¥</b><input id="fba" type="number" min="0" step="0.01" value="38" inputmode="decimal"></div></label>
+        </div>
+
+        <div class="section-heading rates"><div><span>02</span><h2>费率设置</h2></div></div>
+        <div class="field-grid">
+          <label class="field"><span>Amazon 佣金率</span><div class="input-wrap"><input id="commissionRate" type="number" min="0" step="0.1" value="15" inputmode="decimal"><b>%</b></div></label>
+          <label class="field"><span>广告费率</span><div class="input-wrap"><input id="adRate" type="number" min="0" step="0.1" value="10" inputmode="decimal"><b>%</b></div></label>
+          <label class="field"><span>VAT 税率</span><div class="input-wrap"><input id="vatRate" type="number" min="0" step="0.1" value="20" inputmode="decimal"><b>%</b></div></label>
+          <label class="field"><span>退货损耗率</span><div class="input-wrap"><input id="returnRate" type="number" min="0" step="0.1" value="3" inputmode="decimal"><b>%</b></div></label>
+        </div>
+      </form>
+
+      <aside class="result-panel" aria-live="polite">
+        <p class="result-kicker">预计单件净利润</p>
+        <div class="profit-value" id="netProfit">¥0.00</div>
+        <div class="status-pill" id="profitStatus">盈利</div>
+
+        <div class="headline-metrics">
+          <div><span>利润率</span><strong id="margin">0.00%</strong></div>
+          <div><span>ROI</span><strong id="roi">0.00%</strong></div>
+        </div>
+
+        <div class="breakdown">
+          <h2>费用明细</h2>
+          <dl>
+            <div><dt>销售额</dt><dd id="revenue">¥0.00</dd></div>
+            <div><dt>Amazon 佣金</dt><dd id="commission">-¥0.00</dd></div>
+            <div><dt>广告费</dt><dd id="advertising">-¥0.00</dd></div>
+            <div><dt>VAT 估算额</dt><dd id="vat">-¥0.00</dd></div>
+            <div><dt>退货损耗</dt><dd id="returnLoss">-¥0.00</dd></div>
+            <div class="total"><dt>总成本</dt><dd id="totalCost">¥0.00</dd></div>
+          </dl>
+        </div>
+      </aside>
+    </section>
+
+    <section class="formula-card">
+      <div class="formula-title"><span>i</span><div><h2>计算口径</h2><p>本工具按单件商品、含税售价进行估算</p></div></div>
+      <div class="formula-grid">
+        <p><strong>Amazon 佣金 / 广告费 / 退货损耗</strong>销售额 × 对应费率</p>
+        <p><strong>VAT 估算额</strong>销售额 × VAT 税率 ÷（1 + VAT 税率）</p>
+        <p><strong>总成本</strong>固定成本 + 平台费用 + 广告费 + VAT + 退货损耗</p>
+        <p><strong>净利润 / 利润率 / ROI</strong>销售额 − 总成本；净利润 ÷ 销售额；净利润 ÷ 总成本</p>
+      </div>
+      <div class="tax-note"><strong>税务提示</strong> VAT 仅为估算，不替代实际税务申报。实际税额可能受站点、进项税抵扣、税务注册及申报方式等因素影响，请以专业税务意见为准。</div>
+    </section>
+  </main>
+  <footer>仅供经营测算参考 · 数据仅保存在当前浏览器中</footer>
+  <script src="script.js"></script>
+</body>
+</html>
