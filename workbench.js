@@ -9,7 +9,7 @@
     '/products/competitors': { title: '竞品 / ASIN', description: '研究候选 ASIN 的价格、销量、评论、竞争结构和产品表现。' },
     '/products/voc': { title: 'VOC 评论分析', description: '分析竞品评论中的高频痛点、购买动机、差评原因和产品改进机会。' },
     '/products/lifecycle': { title: '生命周期分析', description: '结合历史销量、BSR、关键词趋势等数据判断产品和市场生命周期。' },
-    '/profit': { type: 'profit', title: 'FBA真实利润模拟器' },
+    '/profit': { type: 'profit', title: 'FBA真实利润模拟器', topbar: '利润与风险', context: 'FBA Profit Simulator' },
     '/decision': { title: '决策中心', description: '未来汇总市场、竞争、VOC、利润和风险信息，形成统一选品决策。' },
     '/data/import': { title: '数据导入', description: '未来用于导入产品、市场和经营数据，并映射到统一 ProductRecord。' }
   };
@@ -41,10 +41,23 @@
     </aside>
     <button class="sidebar-overlay" id="sidebarOverlay" aria-label="关闭菜单"></button>
     <section class="workbench-content">
-      <header class="workbench-topbar"><button id="menuButton" class="menu-button" aria-label="打开导航" aria-expanded="false">☰</button><div><strong id="routeTitle">工作台</strong><span>Amazon Seller Workbench</span></div></header>
+      <header class="workbench-topbar"><button id="menuButton" class="menu-button" aria-label="打开导航" aria-expanded="false">☰</button><div><strong id="routeTitle">工作台</strong><span id="routeContext">Amazon Seller Workbench</span></div></header>
       <main id="workbenchView" class="workbench-view"></main>
     </section>`;
   document.body.prepend(shell);
+
+  function createToolHeader({ title, subtitle, description, status, version, actions = [] }) {
+    return `<div class="tool-header-main"><div class="tool-header-title"><div><h1>${title}</h1>${subtitle ? `<span>${subtitle}</span>` : ''}</div><div class="tool-header-meta">${version ? `<small>${version}</small>` : ''}${status ? `<b><i></i>${status}</b>` : ''}${actions.join('')}</div></div><p>${description}</p><div class="tool-header-breadcrumb">利润与风险 <span>/</span> ${subtitle}</div></div>`;
+  }
+
+  document.querySelector('#profitToolHeader').className = 'tool-header';
+  document.querySelector('#profitToolHeader').innerHTML = createToolHeader({
+    title: 'FBA真实利润模拟器',
+    subtitle: 'FBA Profit Simulator',
+    description: '计算真实单件利润、净利润率、ROI、广告盈亏边界与压力情景。',
+    status: '实时模拟',
+    version: 'V2'
+  });
 
   const view = document.querySelector('#workbenchView');
   const sidebar = document.querySelector('#workbenchSidebar');
@@ -82,7 +95,8 @@
   function renderRoute() {
     const path = currentPath();
     const route = routes[path];
-    document.querySelector('#routeTitle').textContent = route.title;
+    document.querySelector('#routeTitle').textContent = route.topbar || route.title;
+    document.querySelector('#routeContext').textContent = route.context || 'Amazon Seller Workbench';
     document.title = `${route.title} · Amazon Seller Workbench`;
     document.querySelectorAll('[data-route]').forEach(link => link.classList.toggle('active', link.dataset.route === path));
     profitHost.hidden = route.type !== 'profit';
