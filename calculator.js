@@ -58,10 +58,15 @@
 
     return {
       input: x,
+      revenue: revenueBeforeTax,
+      productCost: x.productCost,
+      freight: x.freight,
+      fbaFee: x.fbaFee,
       discountAmount, revenueBeforeTax, vat, netRevenue, referralFee,
       advertisingCost, advertisingCostPerOrder: advertisingCost, impliedAdCostPerOrder,
       returnLoss, cogs, amazonOperatingCosts, grossProfit, grossMargin,
-      profitBeforeAdvertising, netProfit, netMargin, totalNonTaxCost, roi,
+      profitBeforeAdvertising, profitBeforeAds: profitBeforeAdvertising,
+      netProfit, netMargin, totalNonTaxCost, roi, ROI: roi,
       breakEvenAdvertisingCost, breakEvenAcos, targetAcos, breakEvenCpc,
       maximumAffordableCpc, advertisingSafetyMargin, breakEvenSellingPrice,
       breakEvenProductCost,
