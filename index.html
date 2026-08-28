@@ -3,81 +3,128 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="适合亚马逊跨境卖家的 FBA 单件利润快速测算工具">
-  <title>亚马逊 FBA 利润计算器</title>
+  <meta name="description" content="亚马逊真实利润与风险模拟器：FBA 单件真实利润、广告盈亏、情景与敏感性分析工具">
+  <title>亚马逊真实利润与风险模拟器</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <main class="app-shell">
     <header class="hero">
       <div>
-        <span class="eyebrow">SELLER TOOLKIT</span>
-        <h1>亚马逊 FBA<br>利润计算器</h1>
-        <p>快速拆解单件商品的费用、利润率与投资回报，帮助你在选品和调价时做出更清晰的判断。</p>
+        <span class="eyebrow">跨境卖家工具 · V2</span>
+        <h1>亚马逊真实利润<br>与风险模拟器</h1>
+        <p>从单件成本、税费、广告到风险情景，完整拆解 Amazon FBA 商品的真实利润与安全边界。</p>
       </div>
-      <div class="hero-badge" aria-label="自动计算已开启"><span></span>自动计算</div>
+      <div class="hero-badge"><span></span>实时模拟</div>
     </header>
 
-    <section class="calculator" aria-label="FBA利润计算器">
+    <section class="calculator" aria-label="FBA 真实利润模拟器">
       <form id="profit-form" class="input-panel">
         <div class="section-heading">
-          <div><span>01</span><h2>成本与售价</h2></div>
+          <div><span>01</span><h2>收入与税费</h2></div>
           <button type="reset" class="reset-button">恢复默认</button>
         </div>
         <div class="field-grid">
-          <label class="field"><span>销售单价</span><div class="input-wrap"><b>¥</b><input id="price" type="number" min="0" step="0.01" value="299" inputmode="decimal"></div></label>
-          <label class="field"><span>采购成本</span><div class="input-wrap"><b>¥</b><input id="purchase" type="number" min="0" step="0.01" value="72" inputmode="decimal"></div></label>
-          <label class="field"><span>国内运费</span><div class="input-wrap"><b>¥</b><input id="domestic" type="number" min="0" step="0.01" value="5" inputmode="decimal"></div></label>
-          <label class="field"><span>头程运费</span><div class="input-wrap"><b>¥</b><input id="firstLeg" type="number" min="0" step="0.01" value="24" inputmode="decimal"></div></label>
-          <label class="field"><span>关税</span><div class="input-wrap"><b>¥</b><input id="customs" type="number" min="0" step="0.01" value="8" inputmode="decimal"></div></label>
-          <label class="field"><span>FBA 配送费</span><div class="input-wrap"><b>¥</b><input id="fba" type="number" min="0" step="0.01" value="38" inputmode="decimal"></div></label>
+          <label class="field"><span>销售单价</span><div class="input-wrap"><b>¥</b><input id="sellingPrice" type="number" min="0" step="0.01" value="299"></div></label>
+          <label class="field"><span>折扣率</span><div class="input-wrap"><input id="discountRate" type="number" min="0" max="100" step="0.1" value="0"><b>%</b></div></label>
+          <label class="field"><span>增值税 / 税率（VAT）</span><div class="input-wrap"><input id="vatRate" type="number" min="0" step="0.1" value="0"><b>%</b></div><small>按含税成交额中的税额估算</small></label>
+          <label class="field"><span>亚马逊销售佣金率</span><div class="input-wrap"><input id="referralRate" type="number" min="0" step="0.1" value="0"><b>%</b></div></label>
         </div>
 
-        <div class="section-heading rates"><div><span>02</span><h2>费率设置</h2></div></div>
+        <div class="section-heading spaced"><div><span>02</span><h2>单件成本结构</h2></div></div>
+        <div class="field-grid cost-fields">
+          <label class="field"><span>产品成本</span><div class="input-wrap"><b>¥</b><input id="productCost" type="number" min="0" step="0.01" value="72"></div></label>
+          <label class="field"><span>包装成本</span><div class="input-wrap"><b>¥</b><input id="packagingCost" type="number" min="0" step="0.01" value="0"></div></label>
+          <label class="field"><span>贴标成本</span><div class="input-wrap"><b>¥</b><input id="labelingCost" type="number" min="0" step="0.01" value="0"></div></label>
+          <label class="field"><span>验货成本</span><div class="input-wrap"><b>¥</b><input id="inspectionCost" type="number" min="0" step="0.01" value="0"></div></label>
+          <label class="field"><span>工具 / 模具摊销</span><div class="input-wrap"><b>¥</b><input id="toolingAmortization" type="number" min="0" step="0.01" value="0"></div></label>
+          <label class="field"><span>国际运费</span><div class="input-wrap"><b>¥</b><input id="freight" type="number" min="0" step="0.01" value="24"></div></label>
+          <label class="field"><span>关税</span><div class="input-wrap"><b>¥</b><input id="duty" type="number" min="0" step="0.01" value="8"></div></label>
+          <label class="field"><span>报关 / 清关费</span><div class="input-wrap"><b>¥</b><input id="customsClearance" type="number" min="0" step="0.01" value="5"></div></label>
+          <label class="field"><span>FBA 配送费</span><div class="input-wrap"><b>¥</b><input id="fbaFee" type="number" min="0" step="0.01" value="0"></div></label>
+          <label class="field"><span>仓储成本</span><div class="input-wrap"><b>¥</b><input id="storageCost" type="number" min="0" step="0.01" value="0"></div></label>
+          <label class="field"><span>其他变动成本</span><div class="input-wrap"><b>¥</b><input id="otherVariableCost" type="number" min="0" step="0.01" value="0"></div></label>
+          <label class="field"><span>退货损耗率</span><div class="input-wrap"><input id="returnRate" type="number" min="0" step="0.1" value="3"><b>%</b></div></label>
+        </div>
+
+        <div class="section-heading spaced"><div><span>03</span><h2>广告参数</h2></div></div>
         <div class="field-grid">
-          <label class="field"><span>Amazon 佣金率</span><div class="input-wrap"><input id="commissionRate" type="number" min="0" step="0.1" value="15" inputmode="decimal"><b>%</b></div></label>
-          <label class="field"><span>广告费率</span><div class="input-wrap"><input id="adRate" type="number" min="0" step="0.1" value="10" inputmode="decimal"><b>%</b></div></label>
-          <label class="field"><span>VAT 税率</span><div class="input-wrap"><input id="vatRate" type="number" min="0" step="0.1" value="20" inputmode="decimal"><b>%</b></div></label>
-          <label class="field"><span>退货损耗率</span><div class="input-wrap"><input id="returnRate" type="number" min="0" step="0.1" value="3" inputmode="decimal"><b>%</b></div></label>
+          <label class="field"><span>广告成本销售比（ACoS）</span><div class="input-wrap"><input id="acos" type="number" min="0" step="0.1" value="0"><b>%</b></div><small>广告花费 ÷ 广告销售额；不是总广告成本销售比（TACoS）</small></label>
+          <label class="field"><span>单次点击成本（CPC）</span><div class="input-wrap"><b>¥</b><input id="cpc" type="number" min="0" step="0.01" value="0"></div></label>
+          <label class="field"><span>转化率（CVR）</span><div class="input-wrap"><input id="cvr" type="number" min="0" step="0.1" value="10"><b>%</b></div></label>
+          <label class="field"><span>目标 ACoS 安全缓冲</span><div class="input-wrap"><input id="targetAcosBuffer" type="number" min="0" step="0.1" value="5"><b>百分点</b></div><small>从盈亏平衡 ACoS 中减去的百分点</small></label>
         </div>
       </form>
 
       <aside class="result-panel" aria-live="polite">
-        <p class="result-kicker">预计单件净利润</p>
+        <p class="result-kicker">单件净利润</p>
         <div class="profit-value" id="netProfit">¥0.00</div>
         <div class="status-pill" id="profitStatus">盈利</div>
-
-        <div class="headline-metrics">
-          <div><span>利润率</span><strong id="margin">0.00%</strong></div>
-          <div><span>ROI</span><strong id="roi">0.00%</strong></div>
+        <div class="headline-metrics three">
+          <div><span>净利润率</span><strong id="netMargin">0.00%</strong></div>
+          <div><span>盈亏平衡 ACoS</span><strong id="breakEvenAcos">0.00%</strong></div>
+          <div><span>盈亏平衡 CPC</span><strong id="breakEvenCpc">¥0.00</strong></div>
         </div>
-
         <div class="breakdown">
-          <h2>费用明细</h2>
+          <h2>利润摘要</h2>
           <dl>
-            <div><dt>销售额</dt><dd id="revenue">¥0.00</dd></div>
-            <div><dt>Amazon 佣金</dt><dd id="commission">-¥0.00</dd></div>
-            <div><dt>广告费</dt><dd id="advertising">-¥0.00</dd></div>
-            <div><dt>VAT 估算额</dt><dd id="vat">-¥0.00</dd></div>
-            <div><dt>退货损耗</dt><dd id="returnLoss">-¥0.00</dd></div>
-            <div class="total"><dt>总成本</dt><dd id="totalCost">¥0.00</dd></div>
+            <div><dt>扣税前成交收入</dt><dd id="revenueBeforeTax">¥0.00</dd></div>
+            <div><dt>税后净收入</dt><dd id="netRevenue">¥0.00</dd></div>
+            <div><dt>毛利润</dt><dd id="grossProfit">¥0.00</dd></div>
+            <div><dt>毛利率</dt><dd id="grossMargin">0.00%</dd></div>
+            <div><dt>广告前利润</dt><dd id="profitBeforeAdvertising">¥0.00</dd></div>
+            <div><dt>单笔订单广告成本</dt><dd id="advertisingCostPerOrder">¥0.00</dd></div>
+            <div><dt>投资回报率（ROI）</dt><dd id="roi">0.00%</dd></div>
           </dl>
         </div>
       </aside>
     </section>
 
-    <section class="formula-card">
-      <div class="formula-title"><span>i</span><div><h2>计算口径</h2><p>本工具按单件商品、含税售价进行估算</p></div></div>
-      <div class="formula-grid">
-        <p><strong>Amazon 佣金 / 广告费 / 退货损耗</strong>销售额 × 对应费率</p>
-        <p><strong>VAT 估算额</strong>销售额 × VAT 税率 ÷（1 + VAT 税率）</p>
-        <p><strong>总成本</strong>固定成本 + 平台费用 + 广告费 + VAT + 退货损耗</p>
-        <p><strong>净利润 / 利润率 / ROI</strong>销售额 − 总成本；净利润 ÷ 销售额；净利润 ÷ 总成本</p>
+    <section class="dashboard-section" id="break-even-section">
+      <div class="block-heading"><span>04</span><div><h2>盈亏平衡分析</h2><p>在其他输入保持不变时的单件盈亏安全边界</p></div></div>
+      <div class="metric-grid five">
+        <article><span>盈亏平衡售价</span><strong id="breakEvenSellingPrice">¥0.00</strong></article>
+        <article><span>盈亏平衡产品成本</span><strong id="breakEvenProductCost">¥0.00</strong></article>
+        <article><span>盈亏平衡广告成本</span><strong id="breakEvenAdvertisingCost">¥0.00</strong></article>
+        <article><span>目标 ACoS</span><strong id="targetAcos">0.00%</strong></article>
+        <article><span>广告安全边际</span><strong id="advertisingSafetyMargin">0.00 个百分点</strong></article>
       </div>
-      <div class="tax-note"><strong>税务提示</strong> VAT 仅为估算，不替代实际税务申报。实际税额可能受站点、进项税抵扣、税务注册及申报方式等因素影响，请以专业税务意见为准。</div>
+    </section>
+
+    <section class="dashboard-section">
+      <div class="block-heading"><span>05</span><div><h2>情景对比</h2><p>六个关键变量可分别设置；未包含的成本沿用基础情景</p></div></div>
+      <div class="scenario-editor" id="scenario-editor"></div>
+      <div class="scenario-results" id="scenario-results"></div>
+    </section>
+
+    <section class="dashboard-section">
+      <div class="block-heading"><span>06</span><div><h2>敏感性分析</h2><p>自动测试价格、产品成本、运费、ACoS 与退货率变化</p></div></div>
+      <div class="impact-callout" id="impact-callout"></div>
+      <div class="table-wrap"><table class="sensitivity-table"><thead><tr><th>变量</th><th>变化</th><th>净利润</th><th>净利润率</th><th>利润影响</th></tr></thead><tbody id="sensitivity-body"></tbody></table></div>
+    </section>
+
+    <section class="dashboard-section cost-detail-section">
+      <div class="block-heading"><span>07</span><div><h2>单件成本明细</h2><p>全部成本均按单件金额展示</p></div></div>
+      <div class="cost-detail-grid" id="unit-cost-detail"></div>
+    </section>
+
+    <section class="formula-card">
+      <div class="formula-title"><span>i</span><div><h2>公式与数据口径</h2><p>所有核心公式均由 calculator.js 集中管理，UI 只负责展示</p></div></div>
+      <div class="formula-grid">
+        <p><strong>扣税前成交收入</strong>销售单价 ×（1 − 折扣率），指扣除折扣后的含税成交额。</p>
+        <p><strong>税后净收入</strong>扣税前成交收入 − VAT；VAT = 含税成交额 × 税率 ÷（1 + 税率）。</p>
+        <p><strong>毛利润 / 毛利率</strong>税后净收入 − 产品及到岸成本；毛利率 = 毛利润 ÷ 税后净收入。</p>
+        <p><strong>广告前利润</strong>毛利润 − 亚马逊费用 − 仓储 − 退货损耗 − 其他变动成本。</p>
+        <p><strong>净利润 / 净利润率</strong>广告前利润 − 广告费；净利润率 = 净利润 ÷ 税后净收入。</p>
+        <p><strong>ACoS 与广告费</strong>广告费 = 含税成交额 × ACoS。ACoS 是广告花费/广告销售额，本工具不把它当作 TACoS。</p>
+        <p><strong>盈亏平衡 ACoS / CPC</strong>广告前利润 ÷ 含税成交额；盈亏平衡 CPC = 广告前利润 × CVR。</p>
+        <p><strong>投资回报率（ROI）</strong>净利润 ÷ 全部非税成本（含广告费）。VAT 属代收税额，不计入投入成本。</p>
+      </div>
+      <div class="tax-note"><strong>数据提示</strong> 本工具不会硬编码任何国家 VAT、Amazon 分类佣金或 FBA 费率。所有税费和平台费用均需用户按实际站点、分类、尺寸重量及有效费率手动输入。VAT 仅为估算，不替代实际税务申报。</div>
     </section>
   </main>
-  <footer>仅供经营测算参考 · 数据仅保存在当前浏览器中</footer>
+  <footer>亚马逊真实利润与风险模拟器 V2 · 仅供经营测算参考</footer>
+  <script src="calculator.js"></script>
   <script src="script.js"></script>
 </body>
 </html>
