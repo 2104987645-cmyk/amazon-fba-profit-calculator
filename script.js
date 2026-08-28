@@ -18,7 +18,12 @@
     advertisingCost: '广告成本', returnLoss: '退货损耗', otherVariableCost: '其他变动成本', vat: '增值税 / 税费'
   };
 
-  const getBase = () => Object.fromEntries(inputIds.map(id => [id, Math.max(0, Number(document.querySelector(`#${id}`).value) || 0)]));
+  const getBase = () => Object.fromEntries(inputIds.map(id => {
+    const value = document.querySelector(`#${id}`).value;
+    if (id === 'adMode') return [id, value];
+    if (id === 'includesVat') return [id, value === 'true'];
+    return [id, Math.max(0, Number(value) || 0)];
+  }));
   const out = (id, value) => { const node = document.querySelector(`#${id}`); if (node) node.textContent = value; };
 
   function scenarioDefaults(base) {
@@ -46,13 +51,25 @@
   function renderSummary(r) {
     out('netProfit', amount(r.netProfit)); out('netMargin', percent(r.netMargin));
     out('breakEvenAcos', percent(r.breakEvenAcos)); out('breakEvenCpc', amount(r.breakEvenCpc));
-    out('revenueBeforeTax', amount(r.revenueBeforeTax)); out('netRevenue', amount(r.netRevenue));
+    out('revenueBeforeTax', amount(r.revenueBeforeTax)); out('vatAmount', amount(r.vat));
+    out('netRevenue', amount(r.netRevenue)); out('grossCustomerPrice', amount(r.grossCustomerPrice));
+    out('advertisingRevenueBase', amount(r.advertisingRevenueBase));
+    out('effectiveAcos', r.effectiveAcos === null ? '不可计算' : percent(r.effectiveAcos));
     out('grossProfit', amount(r.grossProfit)); out('grossMargin', percent(r.grossMargin));
     out('profitBeforeAdvertising', amount(r.profitBeforeAdvertising));
     out('advertisingCostPerOrder', amount(r.advertisingCostPerOrder)); out('roi', percent(r.roi));
     out('breakEvenSellingPrice', amount(r.breakEvenSellingPrice)); out('breakEvenProductCost', amount(r.breakEvenProductCost));
-    out('breakEvenAdvertisingCost', amount(r.breakEvenAdvertisingCost)); out('targetAcos', percent(r.targetAcos));
-    out('advertisingSafetyMargin', `${r.advertisingSafetyMargin.toFixed(2)} 个百分点`);
+    out('breakEvenAdvertisingCost', amount(r.breakEvenAdvertisingCost));
+    out('targetAcos', r.targetAcos === null ? '未设置' : percent(r.targetAcos));
+    out('advertisingSafetyMargin', r.advertisingSafetyMargin === null ? '未设置' : `${r.advertisingSafetyMargin.toFixed(2)} 个百分点`);
+    const adWarning = document.querySelector('#adParameterWarning');
+    adWarning.hidden = !(r.adParameterWarning || r.adModeError);
+    adWarning.textContent = r.adModeError || (r.adParameterWarning
+      ? `广告参数不一致：当前输入 ACoS 为 ${percent(r.input.acos)}，但根据 CPC ${amount(r.input.cpc)} 和 CVR ${percent(r.input.cvr)} 推算的 ACoS 为 ${percent(r.impliedAcos)}。请确认应以哪种广告模型计算利润。`
+      : '');
+    const returnWarning = document.querySelector('#returnLossWarning');
+    returnWarning.hidden = !r.returnLossWarning;
+    returnWarning.textContent = r.returnLossWarning;
     const status = document.querySelector('#profitStatus');
     status.textContent = r.netProfit >= 0 ? '盈利' : '亏损';
     status.classList.toggle('loss', r.netProfit < 0);

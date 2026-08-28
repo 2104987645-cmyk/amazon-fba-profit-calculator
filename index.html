@@ -27,7 +27,8 @@
         <div class="field-grid">
           <label class="field"><span>销售单价</span><div class="input-wrap"><b>¥</b><input id="sellingPrice" type="number" min="0" step="0.01" value="299"></div></label>
           <label class="field"><span>折扣率</span><div class="input-wrap"><input id="discountRate" type="number" min="0" max="100" step="0.1" value="0"><b>%</b></div></label>
-          <label class="field"><span>增值税 / 税率（VAT）</span><div class="input-wrap"><input id="vatRate" type="number" min="0" step="0.1" value="0"><b>%</b></div><small>按含税成交额中的税额估算</small></label>
+          <label class="field"><span>增值税 / 税率（VAT）</span><div class="input-wrap"><input id="vatRate" type="number" min="0" step="0.1" value="0"><b>%</b></div><small>税率由用户按实际站点输入</small></label>
+          <label class="field"><span>销售价格是否含 VAT</span><div class="input-wrap"><select id="includesVat"><option value="true" selected>是，销售价含税</option><option value="false">否，销售价未税</option></select></div></label>
           <label class="field"><span>亚马逊销售佣金率</span><div class="input-wrap"><input id="referralRate" type="number" min="0" step="0.1" value="0"><b>%</b></div></label>
         </div>
 
@@ -44,16 +45,20 @@
           <label class="field"><span>FBA 配送费</span><div class="input-wrap"><b>¥</b><input id="fbaFee" type="number" min="0" step="0.01" value="0"></div></label>
           <label class="field"><span>仓储成本</span><div class="input-wrap"><b>¥</b><input id="storageCost" type="number" min="0" step="0.01" value="0"></div></label>
           <label class="field"><span>其他变动成本</span><div class="input-wrap"><b>¥</b><input id="otherVariableCost" type="number" min="0" step="0.01" value="0"></div></label>
-          <label class="field"><span>退货损耗率</span><div class="input-wrap"><input id="returnRate" type="number" min="0" step="0.1" value="3"><b>%</b></div></label>
+          <label class="field"><span>退货率</span><div class="input-wrap"><input id="returnRate" type="number" min="0" max="100" step="0.1" value="3"><b>%</b></div></label>
+          <label class="field"><span>平均每次退货损失</span><div class="input-wrap"><b>¥</b><input id="averageLossPerReturn" type="number" min="0" step="0.01" value="0"></div><small>未设置时，预计退货损失按 0 计算</small></label>
         </div>
 
         <div class="section-heading spaced"><div><span>03</span><h2>广告参数</h2></div></div>
         <div class="field-grid">
+          <label class="field"><span>广告计算模式</span><div class="input-wrap"><select id="adMode"><option value="acos" selected>ACoS 模式</option><option value="cpc">CPC + CVR 模式</option></select></div></label>
           <label class="field"><span>广告成本销售比（ACoS）</span><div class="input-wrap"><input id="acos" type="number" min="0" step="0.1" value="0"><b>%</b></div><small>广告花费 ÷ 广告销售额；不是总广告成本销售比（TACoS）</small></label>
           <label class="field"><span>单次点击成本（CPC）</span><div class="input-wrap"><b>¥</b><input id="cpc" type="number" min="0" step="0.01" value="0"></div></label>
           <label class="field"><span>转化率（CVR）</span><div class="input-wrap"><input id="cvr" type="number" min="0" step="0.1" value="10"><b>%</b></div></label>
-          <label class="field"><span>目标 ACoS 安全缓冲</span><div class="input-wrap"><input id="targetAcosBuffer" type="number" min="0" step="0.1" value="5"><b>百分点</b></div><small>从盈亏平衡 ACoS 中减去的百分点</small></label>
+          <label class="field"><span>目标 ACoS</span><div class="input-wrap"><input id="targetAcosInput" type="number" min="0" step="0.1" placeholder="未设置"><b>%</b></div><small>留空时安全缓冲显示“未设置”</small></label>
         </div>
+        <div id="adParameterWarning" class="tax-note" hidden></div>
+        <div id="returnLossWarning" class="tax-note" hidden></div>
       </form>
 
       <aside class="result-panel" aria-live="polite">
@@ -69,7 +74,11 @@
           <h2>利润摘要</h2>
           <dl>
             <div><dt>扣税前成交收入</dt><dd id="revenueBeforeTax">¥0.00</dd></div>
+            <div><dt>VAT 税额</dt><dd id="vatAmount">¥0.00</dd></div>
             <div><dt>税后净收入</dt><dd id="netRevenue">¥0.00</dd></div>
+            <div><dt>消费者含 VAT 成交价</dt><dd id="grossCustomerPrice">¥0.00</dd></div>
+            <div><dt>广告销售额计算基数</dt><dd id="advertisingRevenueBase">¥0.00</dd></div>
+            <div><dt>当前计算 ACoS</dt><dd id="effectiveAcos">0.00%</dd></div>
             <div><dt>毛利润</dt><dd id="grossProfit">¥0.00</dd></div>
             <div><dt>毛利率</dt><dd id="grossMargin">0.00%</dd></div>
             <div><dt>广告前利润</dt><dd id="profitBeforeAdvertising">¥0.00</dd></div>
@@ -86,8 +95,8 @@
         <article><span>盈亏平衡售价</span><strong id="breakEvenSellingPrice">¥0.00</strong></article>
         <article><span>盈亏平衡产品成本</span><strong id="breakEvenProductCost">¥0.00</strong></article>
         <article><span>盈亏平衡广告成本</span><strong id="breakEvenAdvertisingCost">¥0.00</strong></article>
-        <article><span>目标 ACoS</span><strong id="targetAcos">0.00%</strong></article>
-        <article><span>广告安全边际</span><strong id="advertisingSafetyMargin">0.00 个百分点</strong></article>
+        <article><span>目标 ACoS</span><strong id="targetAcos">未设置</strong></article>
+        <article><span>目标 ACoS 安全缓冲</span><strong id="advertisingSafetyMargin">未设置</strong></article>
       </div>
     </section>
 
@@ -112,19 +121,19 @@
       <div class="formula-title"><span>i</span><div><h2>公式与数据口径</h2><p>所有核心公式均由 calculator.js 集中管理，UI 只负责展示</p></div></div>
       <div class="formula-grid">
         <p><strong>扣税前成交收入</strong>销售单价 ×（1 − 折扣率），指扣除折扣后的含税成交额。</p>
-        <p><strong>税后净收入</strong>扣税前成交收入 − VAT；VAT = 含税成交额 × 税率 ÷（1 + 税率）。</p>
+        <p><strong>VAT</strong>含税模式：VAT = 含税成交额 × 税率 ÷（1 + 税率）；未税模式：VAT = 未税成交额 × 税率，净收入仍为未税成交额。</p>
         <p><strong>毛利润 / 毛利率</strong>税后净收入 − 产品及到岸成本；毛利率 = 毛利润 ÷ 税后净收入。</p>
-        <p><strong>广告前利润</strong>毛利润 − 亚马逊费用 − 仓储 − 退货损耗 − 其他变动成本。</p>
+        <p><strong>广告前利润</strong>毛利润 − 亚马逊费用 − 仓储 − 预计退货损失 − 其他变动成本；预计退货损失 = 退货率 × 平均每次退货损失。</p>
         <p><strong>净利润 / 净利润率</strong>广告前利润 − 广告费；净利润率 = 净利润 ÷ 税后净收入。</p>
-        <p><strong>ACoS 与广告费</strong>广告费 = 含税成交额 × ACoS。ACoS 是广告花费/广告销售额，本工具不把它当作 TACoS。</p>
-        <p><strong>盈亏平衡 ACoS / CPC</strong>广告前利润 ÷ 含税成交额；盈亏平衡 CPC = 广告前利润 × CVR。</p>
+        <p><strong>广告模式</strong>ACoS 模式：广告费 = 广告销售额计算基数 × ACoS；CPC/CVR 模式：广告费 = CPC ÷ CVR，推算 ACoS = 广告费 ÷ 同一广告销售额计算基数。</p>
+        <p><strong>盈亏平衡 ACoS / CPC</strong>广告前利润 ÷ 广告销售额计算基数；盈亏平衡 CPC = 广告前利润 × CVR。</p>
         <p><strong>投资回报率（ROI）</strong>净利润 ÷ 全部非税成本（含广告费）。VAT 属代收税额，不计入投入成本。</p>
       </div>
       <div class="tax-note"><strong>数据提示</strong> 本工具不会硬编码任何国家 VAT、Amazon 分类佣金或 FBA 费率。所有税费和平台费用均需用户按实际站点、分类、尺寸重量及有效费率手动输入。VAT 仅为估算，不替代实际税务申报。</div>
     </section>
   </main>
   <footer>亚马逊真实利润与风险模拟器 V2 · 仅供经营测算参考</footer>
-  <script src="calculator.js?v=20260828-1"></script>
-  <script src="script.js?v=20260828-1"></script>
+  <script src="calculator.js?v=20260828-2"></script>
+  <script src="script.js?v=20260828-2"></script>
 </body>
 </html>
