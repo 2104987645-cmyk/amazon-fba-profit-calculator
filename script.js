@@ -116,8 +116,9 @@
     adWarning.hidden = !(r.adParameterWarning || r.adModeError);
     adWarning.textContent = r.adModeError || (r.adParameterWarning ? `广告参数不一致：当前输入 ACoS 为 ${percent(r.input.acos)}，但根据 CPC ${amount(r.input.cpc)} 和 CVR ${percent(r.input.cvr)} 推算的 ACoS 为 ${percent(r.impliedAcos)}。请确认应以哪种广告模型计算利润。` : '');
     const returnWarning = document.querySelector('#returnLossWarning');
-    returnWarning.hidden = !r.returnLossWarning;
-    returnWarning.textContent = r.returnLossWarning;
+    const returnModelNeedsInput = r.input.returnRate > 0 && r.input.averageLossPerReturn === 0;
+    returnWarning.hidden = !returnModelNeedsInput;
+    returnWarning.textContent = returnModelNeedsInput ? '当前平均每次退货损失为 ¥0，因此退货率不会影响利润。若存在退款不可追回、FBA处理费、退货运费、商品折损或不可售损失，请填写平均每次退货损失。' : '';
     const status = document.querySelector('#profitStatus');
     status.textContent = r.netProfit >= 0 ? '盈利' : '亏损';
     status.classList.toggle('loss', r.netProfit < 0);
@@ -126,8 +127,15 @@
 
   function renderSensitivity(base) {
     const analysis = Engine.sensitivity(base);
+    const returnModelDisabled = Number(base.averageLossPerReturn) === 0;
+    const returnSensitivityWarning = document.querySelector('#returnSensitivityWarning');
+    returnSensitivityWarning.hidden = !returnModelDisabled;
+    returnSensitivityWarning.textContent = returnModelDisabled ? '当前退货损失模型未启用：平均每次退货损失为 ¥0，不同退货率不会改变利润。' : '';
     document.querySelector('#impact-callout').innerHTML = `<span>利润影响最大变量</span><strong>${sensitivityLabels[analysis.largestImpactVariable]}</strong><p>以测试范围内相对基础情景的最大绝对利润变化判断。</p>`;
-    document.querySelector('#sensitivity-body').innerHTML = analysis.rows.map(row => `<tr class="${row.netProfit < 0 ? 'loss-row' : ''}"><td>${sensitivityLabels[row.variable]}</td><td>${row.label}</td><td>${amount(row.netProfit)}</td><td>${percent(row.netMargin)}</td><td class="${row.impact < 0 ? 'down' : 'up'}">${row.impact >= 0 ? '+' : ''}${amount(row.impact)}</td></tr>`).join('');
+    document.querySelector('#sensitivity-body').innerHTML = analysis.rows.map(row => {
+      const inactiveReturnModel = returnModelDisabled && row.variable === 'returnRate';
+      return `<tr class="${row.netProfit < 0 ? 'loss-row ' : ''}${inactiveReturnModel ? 'model-inactive-row' : ''}"><td>${sensitivityLabels[row.variable]}${inactiveReturnModel ? '<small>当前退货损失模型未启用</small>' : ''}</td><td>${row.label}</td><td>${amount(row.netProfit)}</td><td>${percent(row.netMargin)}</td><td class="${row.impact < 0 ? 'down' : 'up'}">${row.impact >= 0 ? '+' : ''}${amount(row.impact)}</td></tr>`;
+    }).join('');
   }
 
   function renderCostDetail(r) {

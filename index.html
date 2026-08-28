@@ -6,7 +6,7 @@
   <meta name="description" content="Amazon Seller Workbench 亚马逊选品与运营工作台">
   <title>Amazon Seller Workbench</title>
   <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="workbench.css?v=20260828-3">
+  <link rel="stylesheet" href="workbench.css?v=20260828-4">
 </head>
 <body>
   <main class="app-shell">
@@ -87,8 +87,8 @@
       <div class="block-heading"><span>04</span><div><h2>盈亏平衡分析</h2><p>在其他输入保持不变时的单件盈亏安全边界</p></div></div>
       <div class="metric-grid five">
         <article><span>盈亏平衡售价</span><strong id="breakEvenSellingPrice">¥0.00</strong></article>
-        <article><span>盈亏平衡产品成本</span><strong id="breakEvenProductCost">¥0.00</strong></article>
-        <article><span>盈亏平衡广告成本</span><strong id="breakEvenAdvertisingCost">¥0.00</strong></article>
+        <article><span title="在其他条件不变时，使净利润降至0的最高产品成本。">最大可承受产品成本</span><strong id="breakEvenProductCost">¥0.00</strong></article>
+        <article><span title="在其他条件不变时，使净利润降至0的最高单笔订单广告成本。">最大可承受单笔广告成本</span><strong id="breakEvenAdvertisingCost">¥0.00</strong></article>
         <article><span>目标 ACoS</span><strong id="targetAcos">未设置</strong></article>
         <article><span>目标 ACoS 安全缓冲</span><strong id="advertisingSafetyMargin">未设置</strong></article>
       </div>
@@ -104,6 +104,7 @@
     <section class="dashboard-section">
       <div class="block-heading"><span>06</span><div><h2>敏感性分析</h2><p>自动测试价格、产品成本、运费、ACoS 与退货率变化</p></div></div>
       <div class="impact-callout" id="impact-callout"></div>
+      <div id="returnSensitivityWarning" class="tax-note sensitivity-model-note" hidden>当前退货损失模型未启用</div>
       <div class="table-wrap"><table class="sensitivity-table"><thead><tr><th>变量</th><th>变化</th><th>净利润</th><th>净利润率</th><th>利润影响</th></tr></thead><tbody id="sensitivity-body"></tbody></table></div>
     </section>
 
@@ -130,7 +131,7 @@
   <footer>亚马逊真实利润与风险模拟器 V2 · 仅供经营测算参考</footer>
   <script src="product-record.js?v=20260828-1"></script>
   <script src="calculator.js?v=20260828-4"></script>
-  <script src="script.js?v=20260828-4"></script>
+  <script src="script.js?v=20260828-5"></script>
   <script src="workbench.js?v=20260828-2"></script>
 </body>
 </html>
