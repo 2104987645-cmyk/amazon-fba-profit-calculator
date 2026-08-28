@@ -130,6 +130,33 @@
     return calculate(merged);
   }
 
+  function generateScenarioInputs(base) {
+    const clampPercent = value => Math.min(100, n(value));
+    const baseCase = { ...normalize(base) };
+    baseCase.discountRate = clampPercent(baseCase.discountRate);
+    baseCase.returnRate = clampPercent(baseCase.returnRate);
+    baseCase.cvr = clampPercent(baseCase.cvr);
+    const conservative = {
+      ...baseCase,
+      sellingPrice: n(baseCase.sellingPrice * 0.95),
+      productCost: n(baseCase.productCost * 1.05),
+      freight: n(baseCase.freight * 1.10),
+      acos: n(baseCase.acos + 10),
+      returnRate: clampPercent(baseCase.returnRate + 3),
+      cvr: clampPercent(baseCase.cvr * 0.90)
+    };
+    const stress = {
+      ...baseCase,
+      sellingPrice: n(baseCase.sellingPrice * 0.85),
+      productCost: n(baseCase.productCost * 1.20),
+      freight: n(baseCase.freight * 1.30),
+      acos: n(baseCase.acos + 20),
+      returnRate: clampPercent(baseCase.returnRate + 8),
+      cvr: clampPercent(baseCase.cvr * 0.75)
+    };
+    return { base: baseCase, conservative, stress };
+  }
+
   const SENSITIVITY_TESTS = Object.freeze({
     sellingPrice: [-5, -10, -15], productCost: [5, 10, 20], freight: [10, 20, 30],
     acos: [15, 20, 25, 30, 40], returnRate: [3, 5, 8, 10, 15]
@@ -166,5 +193,5 @@
     return { base: baseResult, rows, groups, impactScores, largestImpactVariable };
   }
 
-  return { DEFAULTS, SENSITIVITY_TESTS, normalize, calculate, calculateScenario, sensitivity, round };
+  return { DEFAULTS, SENSITIVITY_TESTS, normalize, calculate, calculateScenario, generateScenarioInputs, sensitivity, round };
 });

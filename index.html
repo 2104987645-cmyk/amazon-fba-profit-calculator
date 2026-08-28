@@ -101,7 +101,8 @@
     </section>
 
     <section class="dashboard-section">
-      <div class="block-heading"><span>05</span><div><h2>情景对比</h2><p>六个关键变量可分别设置；未包含的成本沿用基础情景</p></div></div>
+      <div class="block-heading scenario-heading"><span>05</span><div><h2>情景对比</h2><p>情景保存完整参数快照；六个关键风险变量可继续手动调整</p></div><div class="scenario-actions"><button type="button" id="generateScenarios" class="scenario-button">根据当前数据生成情景</button><button type="button" id="restoreScenarios" class="reset-button">恢复自动情景</button></div></div>
+      <div id="scenarioOutdated" class="scenario-notice" hidden><span>主计算器数据已发生变化，当前情景可能已过期。</span><button type="button" id="regenerateScenarios" class="scenario-button">重新生成情景</button></div>
       <div class="scenario-editor" id="scenario-editor"></div>
       <div class="scenario-results" id="scenario-results"></div>
     </section>
@@ -133,7 +134,7 @@
     </section>
   </main>
   <footer>亚马逊真实利润与风险模拟器 V2 · 仅供经营测算参考</footer>
-  <script src="calculator.js?v=20260828-2"></script>
-  <script src="script.js?v=20260828-2"></script>
+  <script src="calculator.js?v=20260828-3"></script>
+  <script src="script.js?v=20260828-3"></script>
 </body>
 </html>

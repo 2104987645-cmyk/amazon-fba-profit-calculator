@@ -9,6 +9,11 @@
   const scenarioFields = ['sellingPrice', 'productCost', 'freight', 'acos', 'returnRate', 'cvr'];
   const scenarioNames = { base: '基础情景', conservative: '保守情景', stress: '压力情景' };
   const scenarioLabels = { sellingPrice: '销售单价', productCost: '产品成本', freight: '国际运费', acos: 'ACoS（%）', returnRate: '退货率（%）', cvr: '转化率（%）' };
+  const scenarioAssumptions = {
+    base: '当前主计算器参数',
+    conservative: '默认假设：售价 -5%、产品成本 +5%、运费 +10%、ACoS +10个百分点、退货率 +3个百分点、CVR -10%',
+    stress: '默认假设：售价 -15%、产品成本 +20%、运费 +30%、ACoS +20个百分点、退货率 +8个百分点、CVR -25%'
+  };
   const sensitivityLabels = { sellingPrice: '销售单价', productCost: '产品成本', freight: '国际运费', acos: '广告成本销售比（ACoS）', returnRate: '退货率' };
   const costLabels = {
     productCost: '产品成本', packagingCost: '包装成本', labelingCost: '贴标成本',
@@ -17,6 +22,9 @@
     referralFee: '亚马逊销售佣金', fbaFee: 'FBA 配送费', storageCost: '仓储成本',
     advertisingCost: '广告成本', returnLoss: '退货损耗', otherVariableCost: '其他变动成本', vat: '增值税 / 税费'
   };
+  let scenarioState;
+  let scenarioGenerated = false;
+  let scenarioAdjusted = { base: false, conservative: false, stress: false };
 
   const getBase = () => Object.fromEntries(inputIds.map(id => {
     const value = document.querySelector(`#${id}`).value;
@@ -25,27 +33,69 @@
     return [id, Math.max(0, Number(value) || 0)];
   }));
   const out = (id, value) => { const node = document.querySelector(`#${id}`); if (node) node.textContent = value; };
+  const clampScenarioValue = (field, value) => {
+    const safe = Math.max(0, Number(value) || 0);
+    return ['returnRate', 'cvr'].includes(field) ? Math.min(100, safe) : safe;
+  };
 
-  function scenarioDefaults(base) {
-    return {
-      base: Object.fromEntries(scenarioFields.map(key => [key, base[key]])),
-      conservative: { sellingPrice: base.sellingPrice * .95, productCost: base.productCost * 1.05, freight: base.freight * 1.1, acos: Math.max(base.acos, 20), returnRate: Math.max(base.returnRate, 5), cvr: base.cvr * .9 },
-      stress: { sellingPrice: base.sellingPrice * .85, productCost: base.productCost * 1.2, freight: base.freight * 1.3, acos: Math.max(base.acos, 30), returnRate: Math.max(base.returnRate, 10), cvr: base.cvr * .75 }
-    };
+  function assumptionText(key) {
+    return scenarioAdjusted[key] ? `${scenarioAssumptions[key]} · 已手动调整` : scenarioAssumptions[key];
   }
 
-  function buildScenarios() {
-    const defaults = scenarioDefaults(getBase());
+  function buildScenarioEditors() {
     document.querySelector('#scenario-editor').innerHTML = Object.entries(scenarioNames).map(([key, name]) => `
       <article class="scenario-input-card" data-scenario="${key}">
         <h3>${name}</h3>
-        <div>${scenarioFields.map(field => `<label><span>${scenarioLabels[field]}</span><input type="number" min="0" step="0.01" data-field="${field}" value="${defaults[key][field].toFixed(2)}"></label>`).join('')}</div>
+        <p class="scenario-assumption ${scenarioAdjusted[key] ? 'adjusted' : ''}">${assumptionText(key)}</p>
+        <div>${scenarioFields.map(field => `<label><span>${scenarioLabels[field]}</span><input type="number" min="0" ${['returnRate', 'cvr'].includes(field) ? 'max="100"' : ''} step="0.01" data-field="${field}" value="${scenarioState[key][field].toFixed(2)}"></label>`).join('')}</div>
       </article>`).join('');
   }
 
-  function readScenario(key) {
-    const card = document.querySelector(`[data-scenario="${key}"]`);
-    return Object.fromEntries(scenarioFields.map(field => [field, Math.max(0, Number(card.querySelector(`[data-field="${field}"]`).value) || 0)]));
+  function scenarioResultMarkup(key, baseResult) {
+    const r = Engine.calculate(scenarioState[key]);
+    const profitChange = r.netProfit - baseResult.netProfit;
+    const profitChangeRate = baseResult.netProfit === 0 ? null : profitChange / Math.abs(baseResult.netProfit) * 100;
+    return `<article class="scenario-result-card ${r.netProfit < 0 ? 'loss-card' : ''}" data-result="${key}">
+      <div class="scenario-title"><h3>${scenarioNames[key]}</h3><span>${r.netProfit < 0 ? '亏损' : '盈利'}</span></div>
+      <strong>${amount(r.netProfit)}</strong>
+      <dl><div><dt>净利润率</dt><dd>${percent(r.netMargin)}</dd></div><div><dt>投资回报率</dt><dd>${percent(r.roi)}</dd></div><div><dt>盈亏平衡 ACoS</dt><dd>${percent(r.breakEvenAcos)}</dd></div><div><dt>盈亏平衡 CPC</dt><dd>${amount(r.breakEvenCpc)}</dd></div><div class="vs-base"><dt>相对基础情景</dt><dd>${key === 'base' ? '—' : `${profitChange >= 0 ? '+' : ''}${amount(profitChange)} / ${profitChangeRate === null ? '—' : `${profitChangeRate >= 0 ? '+' : ''}${percent(profitChangeRate)}`}`}</dd></div></dl>
+    </article>`;
+  }
+
+  function renderScenarios(keys = Object.keys(scenarioNames)) {
+    const baseResult = Engine.calculate(scenarioState.base);
+    const container = document.querySelector('#scenario-results');
+    if (!container.children.length || keys.length === 3) {
+      container.innerHTML = Object.keys(scenarioNames).map(key => scenarioResultMarkup(key, baseResult)).join('');
+      return;
+    }
+    keys.forEach(key => {
+      const current = container.querySelector(`[data-result="${key}"]`);
+      if (current) current.outerHTML = scenarioResultMarkup(key, baseResult);
+    });
+  }
+
+  function setScenarioOutdated(outdated) {
+    document.querySelector('#scenarioOutdated').hidden = !outdated;
+  }
+
+  function generateScenariosFromCurrent() {
+    scenarioState = Engine.generateScenarioInputs(getBase());
+    scenarioGenerated = true;
+    scenarioAdjusted = { base: false, conservative: false, stress: false };
+    buildScenarioEditors();
+    renderScenarios();
+    setScenarioOutdated(false);
+  }
+
+  function restoreAutomaticScenarios() {
+    const regenerated = Engine.generateScenarioInputs(scenarioState.base);
+    scenarioState.conservative = regenerated.conservative;
+    scenarioState.stress = regenerated.stress;
+    scenarioAdjusted.conservative = false;
+    scenarioAdjusted.stress = false;
+    buildScenarioEditors();
+    renderScenarios();
   }
 
   function renderSummary(r) {
@@ -64,9 +114,7 @@
     out('advertisingSafetyMargin', r.advertisingSafetyMargin === null ? '未设置' : `${r.advertisingSafetyMargin.toFixed(2)} 个百分点`);
     const adWarning = document.querySelector('#adParameterWarning');
     adWarning.hidden = !(r.adParameterWarning || r.adModeError);
-    adWarning.textContent = r.adModeError || (r.adParameterWarning
-      ? `广告参数不一致：当前输入 ACoS 为 ${percent(r.input.acos)}，但根据 CPC ${amount(r.input.cpc)} 和 CVR ${percent(r.input.cvr)} 推算的 ACoS 为 ${percent(r.impliedAcos)}。请确认应以哪种广告模型计算利润。`
-      : '');
+    adWarning.textContent = r.adModeError || (r.adParameterWarning ? `广告参数不一致：当前输入 ACoS 为 ${percent(r.input.acos)}，但根据 CPC ${amount(r.input.cpc)} 和 CVR ${percent(r.input.cvr)} 推算的 ACoS 为 ${percent(r.impliedAcos)}。请确认应以哪种广告模型计算利润。` : '');
     const returnWarning = document.querySelector('#returnLossWarning');
     returnWarning.hidden = !r.returnLossWarning;
     returnWarning.textContent = r.returnLossWarning;
@@ -74,17 +122,6 @@
     status.textContent = r.netProfit >= 0 ? '盈利' : '亏损';
     status.classList.toggle('loss', r.netProfit < 0);
     document.querySelector('#netProfit').classList.toggle('negative', r.netProfit < 0);
-  }
-
-  function renderScenarios(base) {
-    document.querySelector('#scenario-results').innerHTML = Object.entries(scenarioNames).map(([key, name]) => {
-      const r = Engine.calculateScenario(base, readScenario(key));
-      return `<article class="scenario-result-card ${r.netProfit < 0 ? 'loss-card' : ''}">
-        <div class="scenario-title"><h3>${name}</h3><span>${r.netProfit < 0 ? '亏损' : '盈利'}</span></div>
-        <strong>${amount(r.netProfit)}</strong>
-        <dl><div><dt>净利润率</dt><dd>${percent(r.netMargin)}</dd></div><div><dt>投资回报率</dt><dd>${percent(r.roi)}</dd></div><div><dt>盈亏平衡 ACoS</dt><dd>${percent(r.breakEvenAcos)}</dd></div><div><dt>盈亏平衡 CPC</dt><dd>${amount(r.breakEvenCpc)}</dd></div></dl>
-      </article>`;
-    }).join('');
   }
 
   function renderSensitivity(base) {
@@ -97,15 +134,36 @@
     document.querySelector('#unit-cost-detail').innerHTML = Object.entries(r.unitCosts).map(([key, value]) => `<div><span>${costLabels[key]}</span><strong>${amount(value)}</strong></div>`).join('');
   }
 
-  function calculateAll() {
+  function calculateMain() {
     const base = getBase();
     const result = Engine.calculate(base);
-    renderSummary(result); renderScenarios(base); renderSensitivity(base); renderCostDetail(result);
+    renderSummary(result); renderSensitivity(base); renderCostDetail(result);
   }
 
-  buildScenarios();
-  form.addEventListener('input', calculateAll);
-  form.addEventListener('reset', () => requestAnimationFrame(() => { buildScenarios(); calculateAll(); }));
-  document.querySelector('#scenario-editor').addEventListener('input', calculateAll);
-  calculateAll();
+  form.addEventListener('input', () => {
+    calculateMain();
+    if (scenarioGenerated) setScenarioOutdated(true);
+  });
+  form.addEventListener('reset', () => requestAnimationFrame(() => {
+    calculateMain();
+    if (scenarioGenerated) setScenarioOutdated(true);
+  }));
+  document.querySelector('#scenario-editor').addEventListener('input', event => {
+    const input = event.target.closest('[data-field]');
+    if (!input) return;
+    const key = input.closest('[data-scenario]').dataset.scenario;
+    const field = input.dataset.field;
+    scenarioState[key][field] = clampScenarioValue(field, input.value);
+    scenarioAdjusted[key] = true;
+    const note = input.closest('.scenario-input-card').querySelector('.scenario-assumption');
+    note.textContent = assumptionText(key);
+    note.classList.add('adjusted');
+    renderScenarios(key === 'base' ? Object.keys(scenarioNames) : [key]);
+  });
+  document.querySelector('#generateScenarios').addEventListener('click', generateScenariosFromCurrent);
+  document.querySelector('#regenerateScenarios').addEventListener('click', generateScenariosFromCurrent);
+  document.querySelector('#restoreScenarios').addEventListener('click', restoreAutomaticScenarios);
+
+  calculateMain();
+  generateScenariosFromCurrent();
 })();
