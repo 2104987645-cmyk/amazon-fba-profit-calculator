@@ -1,8 +1,9 @@
 (function (root, factory) {
-  const api = factory();
+  const config = root.MarketplaceConfig || (typeof module === 'object' && module.exports ? require('./marketplace-config.js') : null);
+  const api = factory(config);
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.ProfitEngine = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (MarketplaceConfig) {
   'use strict';
 
   const n = value => {
@@ -12,8 +13,16 @@
   const rate = value => n(value) / 100;
   const safeDivide = (a, b) => b > 0 ? a / b : 0;
   const round = value => Math.round((value + Number.EPSILON) * 100) / 100;
+  const toMarketplaceCurrency = (cnyAmount, exchangeRate) => n(cnyAmount) / (n(exchangeRate) || 1);
+  const toCny = (localAmount, exchangeRate) => {
+    const parsed = Number(localAmount);
+    return (Number.isFinite(parsed) ? parsed : 0) * (n(exchangeRate) || 1);
+  };
+  const getMarketplace = code => MarketplaceConfig?.getMarketplace(code) || { code: 'UK', currency: 'GBP' };
+  const getDefaultExchangeRate = currency => MarketplaceConfig?.getDefaultExchangeRate(currency) || 1;
 
   const DEFAULTS = Object.freeze({
+    marketplace: 'UK', currency: 'GBP', exchangeRate: 1,
     sellingPrice: 299, discountRate: 0, vatRate: 0, includesVat: true,
     productCost: 72, packagingCost: 0, labelingCost: 0, inspectionCost: 0,
     toolingAmortization: 0, freight: 24, duty: 8, customsClearance: 5,
@@ -26,7 +35,13 @@
   function normalize(input = {}) {
     const normalized = {};
     for (const [key, fallback] of Object.entries(DEFAULTS)) {
-      if (key === 'adMode') normalized[key] = input[key] === 'cpc' ? 'cpc' : 'acos';
+      if (key === 'marketplace') normalized[key] = getMarketplace(input[key] || fallback).code;
+      else if (key === 'currency') normalized[key] = String(input[key] || getMarketplace(input.marketplace || DEFAULTS.marketplace).currency);
+      else if (key === 'exchangeRate') {
+        const supplied = n(input[key] ?? fallback);
+        const currency = String(input.currency || getMarketplace(input.marketplace || DEFAULTS.marketplace).currency);
+        normalized[key] = supplied > 0 ? supplied : getDefaultExchangeRate(currency);
+      } else if (key === 'adMode') normalized[key] = input[key] === 'cpc' ? 'cpc' : 'acos';
       else if (key === 'includesVat') normalized[key] = input[key] === undefined ? fallback : input[key] === true || input[key] === 'true' || input[key] === 'yes';
       else normalized[key] = n(input[key] ?? fallback);
     }
@@ -35,6 +50,14 @@
 
   function calculate(input = {}) {
     const x = normalize(input);
+    const productCostLocal = toMarketplaceCurrency(x.productCost, x.exchangeRate);
+    const packagingCostLocal = toMarketplaceCurrency(x.packagingCost, x.exchangeRate);
+    const labelingCostLocal = toMarketplaceCurrency(x.labelingCost, x.exchangeRate);
+    const inspectionCostLocal = toMarketplaceCurrency(x.inspectionCost, x.exchangeRate);
+    const toolingAmortizationLocal = toMarketplaceCurrency(x.toolingAmortization, x.exchangeRate);
+    const freightLocal = toMarketplaceCurrency(x.freight, x.exchangeRate);
+    const dutyLocal = toMarketplaceCurrency(x.duty, x.exchangeRate);
+    const customsClearanceLocal = toMarketplaceCurrency(x.customsClearance, x.exchangeRate);
     const discountAmount = x.sellingPrice * rate(x.discountRate);
     const discountedSellingPrice = x.sellingPrice - discountAmount;
 
@@ -68,8 +91,8 @@
     const returnLossWarning = x.returnRate > 0 && x.averageLossPerReturn === 0
       ? '尚未设置平均每次退货损失。'
       : '';
-    const cogs = x.productCost + x.packagingCost + x.labelingCost + x.inspectionCost +
-      x.toolingAmortization + x.freight + x.duty + x.customsClearance;
+    const cogs = productCostLocal + packagingCostLocal + labelingCostLocal + inspectionCostLocal +
+      toolingAmortizationLocal + freightLocal + dutyLocal + customsClearanceLocal;
     const amazonOperatingCosts = referralFee + x.fbaFee + x.storageCost;
     const grossProfit = netRevenue - cogs;
     const grossMargin = safeDivide(grossProfit, netRevenue) * 100;
@@ -93,12 +116,31 @@
     const fixedUnitCost = cogs + x.fbaFee + x.storageCost + x.otherVariableCost + returnLoss +
       (x.adMode === 'cpc' ? advertisingCost : 0);
     const breakEvenSellingPrice = priceContributionFactor > 0 ? fixedUnitCost / priceContributionFactor : null;
-    const breakEvenProductCost = Math.max(0, x.productCost + netProfit);
+    const breakEvenProductCostLocal = Math.max(0, productCostLocal + netProfit);
+    const breakEvenProductCostCny = toCny(breakEvenProductCostLocal, x.exchangeRate);
+    const netProfitLocal = netProfit;
+    const netProfitCny = toCny(netProfitLocal, x.exchangeRate);
+    const grossProfitLocal = grossProfit;
+    const grossProfitCny = toCny(grossProfitLocal, x.exchangeRate);
+    const totalNonTaxCostLocal = totalNonTaxCost;
+    const totalNonTaxCostCny = toCny(totalNonTaxCostLocal, x.exchangeRate);
+    const unitCosts = {
+      productCost: productCostLocal, packagingCost: packagingCostLocal,
+      labelingCost: labelingCostLocal, inspectionCost: inspectionCostLocal,
+      toolingAmortization: toolingAmortizationLocal, freight: freightLocal,
+      duty: dutyLocal, customsClearance: customsClearanceLocal,
+      referralFee, fbaFee: x.fbaFee, storageCost: x.storageCost,
+      advertisingCost, returnLoss, otherVariableCost: x.otherVariableCost, vat
+    };
+    const unitCostsCny = Object.fromEntries(Object.entries(unitCosts).map(([key, value]) => [key, toCny(value, x.exchangeRate)]));
 
     return {
       input: x, revenue: discountedSellingPrice, revenueBeforeTax: discountedSellingPrice,
       discountedSellingPrice, grossCustomerPrice, advertisingRevenueBase,
-      productCost: x.productCost, freight: x.freight, fbaFee: x.fbaFee,
+      marketplace: x.marketplace, currency: x.currency, exchangeRate: x.exchangeRate,
+      productCost: productCostLocal, productCostLocal, productCostCny: x.productCost,
+      packagingCostLocal, labelingCostLocal, inspectionCostLocal, toolingAmortizationLocal,
+      freight: freightLocal, freightLocal, freightCny: x.freight, dutyLocal, customsClearanceLocal, fbaFee: x.fbaFee,
       discountAmount, vat, netRevenue, referralFee,
       advertisingCost, advertisingCostPerOrder: advertisingCost,
       acosBasedAdvertisingCost, cpcCvrAdvertisingCost, clicksPerOrder, impliedAcos,
@@ -107,18 +149,14 @@
       returnLoss, expectedReturnLoss: returnLoss, returnLossWarning,
       cogs, amazonOperatingCosts, grossProfit, grossMargin,
       profitBeforeAdvertising, profitBeforeAds: profitBeforeAdvertising,
-      netProfit, netMargin, totalNonTaxCost, roi, ROI: roi,
+      netProfit, netProfitLocal, netProfitCny, netMargin,
+      grossProfitLocal, grossProfitCny,
+      totalNonTaxCost, totalNonTaxCostLocal, totalNonTaxCostCny, roi, ROI: roi,
       breakEvenAdvertisingCost, breakEvenAcos, targetAcos, breakEvenCpc,
       maximumAffordableCpc: breakEvenCpc, advertisingSafetyMargin,
-      breakEvenSellingPrice, breakEvenProductCost,
-      unitCosts: {
-        productCost: x.productCost, packagingCost: x.packagingCost,
-        labelingCost: x.labelingCost, inspectionCost: x.inspectionCost,
-        toolingAmortization: x.toolingAmortization, freight: x.freight,
-        duty: x.duty, customsClearance: x.customsClearance,
-        referralFee, fbaFee: x.fbaFee, storageCost: x.storageCost,
-        advertisingCost, returnLoss, otherVariableCost: x.otherVariableCost, vat
-      }
+      breakEvenSellingPrice, breakEvenProductCost: breakEvenProductCostCny,
+      breakEvenProductCostLocal, breakEvenProductCostCny,
+      unitCosts, unitCostsCny
     };
   }
 
@@ -193,5 +231,5 @@
     return { base: baseResult, rows, groups, impactScores, largestImpactVariable };
   }
 
-  return { DEFAULTS, SENSITIVITY_TESTS, normalize, calculate, calculateScenario, generateScenarioInputs, sensitivity, round };
+  return { DEFAULTS, SENSITIVITY_TESTS, normalize, calculate, calculateScenario, generateScenarioInputs, sensitivity, toMarketplaceCurrency, toCny, round };
 });

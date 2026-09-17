@@ -9,6 +9,8 @@
    * @property {string} id
    * @property {string} asin
    * @property {string} marketplace
+   * @property {string} currency
+   * @property {number} exchangeRate
    * @property {string} title
    * @property {string} brand
    * @property {string} category
@@ -19,12 +21,23 @@
    * @property {{competitionScore:number|null,demandScore:number|null,vocScore:number|null,riskScore:number|null,opportunityScore:number|null}} analysis
    */
   const ProductRecordSchema = Object.freeze({
-    identity: Object.freeze(['id', 'asin', 'marketplace', 'title', 'brand', 'category', 'mainKeyword']),
+    identity: Object.freeze(['id', 'asin', 'marketplace', 'currency', 'exchangeRate', 'title', 'brand', 'category', 'mainKeyword']),
     marketData: Object.freeze(['price', 'monthlySales', 'monthlyRevenue', 'bsr', 'rating', 'reviewCount']),
     physical: Object.freeze(['length', 'width', 'height', 'weight']),
     profitInputs: Object.freeze(['productCost', 'packagingCost', 'inspectionCost', 'freight', 'duty', 'fbaFee', 'storageCost', 'returnRate', 'averageReturnLoss', 'referralFeeRate', 'vatRate', 'acos', 'cpc', 'cvr']),
     analysis: Object.freeze(['competitionScore', 'demandScore', 'vocScore', 'riskScore', 'opportunityScore'])
   });
 
-  root.WorkbenchModels = Object.freeze({ ProductRecordSchema });
+  function normalizeProductRecord(record = {}) {
+    const config = root.MarketplaceConfig;
+    const marketplace = config?.MARKETPLACES?.[record.marketplace] ? record.marketplace : 'UK';
+    const marketplaceData = config?.getMarketplace?.(marketplace) || { currency: 'GBP' };
+    const currency = record.currency || marketplaceData.currency;
+    const exchangeRate = Number(record.exchangeRate) > 0
+      ? Number(record.exchangeRate)
+      : (config?.getDefaultExchangeRate?.(currency) || 9.6);
+    return { ...record, marketplace, currency, exchangeRate };
+  }
+
+  root.WorkbenchModels = Object.freeze({ ProductRecordSchema, normalizeProductRecord });
 })(typeof globalThis !== 'undefined' ? globalThis : this);
