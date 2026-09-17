@@ -10,6 +10,7 @@
     '/products/voc': { title: 'VOC 评论分析', description: '分析竞品评论中的高频痛点、购买动机、差评原因和产品改进机会。' },
     '/products/lifecycle': { title: '生命周期分析', description: '结合历史销量、BSR、关键词趋势等数据判断产品和市场生命周期。' },
     '/profit': { type: 'profit', title: 'FBA真实利润模拟器', topbar: '利润与风险', context: 'FBA Profit Simulator' },
+    '/inventory': { type: 'inventory', title: '库存与补货分析', topbar: '库存与补货', context: 'Inventory & Restock' },
     '/decision': { title: '决策中心', description: '未来汇总市场、竞争、VOC、利润和风险信息，形成统一选品决策。' },
     '/data/import': { title: '数据导入', description: '未来用于导入产品、市场和经营数据，并映射到统一 ProductRecord。' }
   };
@@ -20,7 +21,8 @@
     ['03', 'VOC 评论分析', 'Voice of Customer', '分析竞品评论中的高频痛点、购买动机、差评原因和产品改进机会。', '/products/voc', false],
     ['04', 'FBA真实利润模拟器', 'FBA Profit Simulator', '计算真实单件利润、利润率、ROI、广告盈亏平衡和压力测试。', '/profit', true],
     ['05', '生命周期分析', 'Lifecycle Analysis', '结合历史销量、BSR、关键词趋势等数据判断产品和市场生命周期。', '/products/lifecycle', false],
-    ['06', '决策中心', 'Decision Center', '未来汇总市场、竞争、VOC、利润和风险信息形成统一选品决策。', '/decision', false]
+    ['06', '库存与补货分析', 'Inventory & Restock', '合并 FBA 与 AWD 库存报告，识别缺货、补货与积压风险。', '/inventory', true],
+    ['07', '决策中心', 'Decision Center', '未来汇总市场、竞争、VOC、利润和风险信息形成统一选品决策。', '/decision', false]
   ];
 
   const calculator = document.querySelector('.app-shell');
@@ -35,6 +37,7 @@
         <div class="nav-group"><p>选品研究</p><a href="#/research/batch" data-route="/research/batch">批量选品分析<em>即将推出</em></a><a href="#/research/market" data-route="/research/market">市场研究<em>即将推出</em></a></div>
         <div class="nav-group"><p>产品研究</p><a href="#/products" data-route="/products">候选产品库<em>即将推出</em></a><a href="#/products/competitors" data-route="/products/competitors">竞品 / ASIN<em>即将推出</em></a><a href="#/products/voc" data-route="/products/voc">VOC 评论分析<em>即将推出</em></a><a href="#/products/lifecycle" data-route="/products/lifecycle">生命周期分析<em>即将推出</em></a></div>
         <div class="nav-group"><p>利润与风险</p><a href="#/profit" data-route="/profit">FBA真实利润模拟器<span class="available-dot">可用</span></a></div>
+        <div class="nav-group"><p>运营管理</p><a href="#/inventory" data-route="/inventory">库存与补货分析<span class="available-dot">可用</span><small>Inventory &amp; Restock</small></a></div>
         <a href="#/decision" data-route="/decision"><b>05</b><span>决策中心<small>即将推出</small></span></a>
         <div class="nav-group"><p>数据管理</p><a href="#/data/import" data-route="/data/import">数据导入<em>即将推出</em></a></div>
       </nav>
@@ -74,7 +77,7 @@
     return `<section class="dashboard-page route-page">
       <header class="dashboard-intro"><p>AMAZON SELLER WORKBENCH</p><h1>亚马逊选品与运营工作台</h1><span>从市场发现、产品研究、VOC、利润测算到采购决策的一体化工作台。</span></header>
       <section class="dashboard-start"><div><small>开始新的产品研究</small><h2>选择下一步工作</h2></div><div><a class="button secondary" href="#/data/import">导入产品数据</a><a class="button primary" href="#/profit">打开利润模拟器</a></div></section>
-      <section class="module-section"><div class="module-heading"><h2>工作模块</h2><span>当前可用 2 个页面：工作台与利润模拟器</span></div><div class="module-grid">${modules.map(item => `<article class="module-card ${item[5] ? 'is-available' : ''}"><div><b>${item[0]}</b><span class="status ${item[5] ? 'available' : 'soon'}">${item[5] ? 'Available' : 'Coming Soon'}</span></div><h3>${item[1]}</h3><small>${item[2]}</small><p>${item[3]}</p><a href="#${item[4]}">${item[5] ? '打开工具' : '查看模块'}</a></article>`).join('')}</div></section>
+      <section class="module-section"><div class="module-heading"><h2>工作模块</h2><span>当前可用 3 个页面：工作台、利润模拟器与库存分析</span></div><div class="module-grid">${modules.map(item => `<article class="module-card ${item[5] ? 'is-available' : ''}"><div><b>${item[0]}</b><span class="status ${item[5] ? 'available' : 'soon'}">${item[5] ? 'Available' : 'Coming Soon'}</span></div><h3>${item[1]}</h3><small>${item[2]}</small><p>${item[3]}</p><a href="#${item[4]}">${item[5] ? '打开工具' : '查看模块'}</a></article>`).join('')}</div></section>
     </section>`;
   }
 
@@ -100,8 +103,16 @@
     document.title = `${route.title} · Amazon Seller Workbench`;
     document.querySelectorAll('[data-route]').forEach(link => link.classList.toggle('active', link.dataset.route === path));
     profitHost.hidden = route.type !== 'profit';
+    if (window.InventoryModule) window.InventoryModule.unmount();
     view.querySelectorAll('.route-page:not(#profitModule)').forEach(node => node.remove());
     if (route.type === 'dashboard') view.insertAdjacentHTML('afterbegin', dashboardMarkup());
+    else if (route.type === 'inventory') {
+      const inventoryHost = document.createElement('div');
+      inventoryHost.id = 'inventoryModule';
+      inventoryHost.className = 'route-page';
+      view.prepend(inventoryHost);
+      window.InventoryModule.mount(inventoryHost);
+    }
     else if (route.type !== 'profit') view.insertAdjacentHTML('afterbegin', placeholderMarkup(route));
     closeMenu();
     window.scrollTo(0, 0);
