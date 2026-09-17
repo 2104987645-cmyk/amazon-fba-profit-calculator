@@ -2,6 +2,7 @@
   'use strict';
   const Engine = window.ProfitEngine;
   const Marketplace = window.MarketplaceConfig;
+  const Fx = window.ExchangeRateService;
   const form = document.querySelector('#profit-form');
   const STORAGE_KEY = 'amazonSellerWorkbench.profitCurrency.v1';
   const moneyFormatters = {};
@@ -31,6 +32,9 @@
   let scenarioState;
   let scenarioGenerated = false;
   let scenarioAdjusted = { base: false, conservative: false, stress: false };
+  let currentRateMeta = null;
+  let currentCurrency = null;
+  let rateRequestToken = 0;
 
   const getBase = () => Object.fromEntries(inputIds.map(id => {
     if (id === 'currency') return [id, Marketplace.getMarketplace(document.querySelector('#marketplace').value).currency];
@@ -171,12 +175,79 @@
     document.querySelectorAll('[data-currency-symbol]').forEach(node => { node.textContent = selected.currencySymbol; });
   }
 
+  function formatFetchedAt(value) {
+    if (!value) return '—';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? '—' : new Intl.DateTimeFormat('zh-CN', {
+      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false
+    }).format(date);
+  }
+
+  function showRateMessage(message) {
+    const node = document.querySelector('#exchangeRateMessage');
+    node.hidden = !message;
+    node.textContent = message || '';
+  }
+
+  function renderRateStatus(meta, manual = false) {
+    const status = document.querySelector('#exchangeRateStatus');
+    status.classList.remove('warning');
+    if (manual) {
+      status.textContent = '手动汇率';
+      out('exchangeRateDate', '汇率数据日期：手动输入');
+      out('exchangeRateFetchedAt', '获取时间：—');
+      return;
+    }
+    if (meta?.isFallback) {
+      status.textContent = '备用汇率 · 请手动确认';
+      status.classList.add('warning');
+    } else if (meta?.fromCache) status.textContent = '缓存汇率 · Frankfurter';
+    else status.textContent = '最新参考汇率 · Frankfurter';
+    out('exchangeRateDate', `汇率数据日期：${meta?.rateDate || '—'}`);
+    out('exchangeRateFetchedAt', `获取时间：${formatFetchedAt(meta?.fetchedAt)}`);
+  }
+
+  function applyRateResult(meta, options = {}) {
+    const rate = Number(meta?.rate);
+    if (!Number.isFinite(rate) || rate <= 0) return false;
+    if (document.querySelector('#manualExchangeRateEnabled').checked && !options.allowManual) return false;
+    currentRateMeta = meta;
+    document.querySelector('#exchangeRate').value = String(rate);
+    renderRateStatus(meta, false);
+    saveCurrencyPreferences();
+    calculateMain();
+    if (scenarioGenerated) setScenarioOutdated(true);
+    return true;
+  }
+
+  async function loadAutomaticRate(currency, force = false) {
+    const token = ++rateRequestToken;
+    const button = document.querySelector('#refreshExchangeRate');
+    if (force) { button.disabled = true; button.textContent = '更新中…'; }
+    showRateMessage('');
+    try {
+      const meta = await (force ? Fx.refreshRate(currency) : Fx.getLatestRate(currency));
+      if (token !== rateRequestToken || currentCurrency !== currency || document.querySelector('#manualExchangeRateEnabled').checked) return;
+      applyRateResult(meta);
+      if (force && meta.error) showRateMessage('汇率更新失败，继续使用当前汇率。');
+    } catch (error) {
+      console.warn('[FX] Unable to resolve a valid exchange rate.', error?.message || error);
+      showRateMessage('汇率更新失败，继续使用当前汇率。');
+    } finally {
+      if (force) { button.disabled = false; button.textContent = '刷新汇率'; }
+    }
+  }
+
   function saveCurrencyPreferences() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
         marketplace: document.querySelector('#marketplace').value,
         exchangeRate: Number(document.querySelector('#exchangeRate').value) || 0,
-        displayCurrency: displayMode()
+        displayCurrency: displayMode(),
+        manualExchangeRateEnabled: document.querySelector('#manualExchangeRateEnabled').checked,
+        exchangeRateSource: currentRateMeta?.source || null,
+        exchangeRateDate: currentRateMeta?.rateDate || null,
+        exchangeRateFetchedAt: currentRateMeta?.fetchedAt || null
       }));
     } catch (_) { /* Storage can be unavailable in privacy mode; calculation remains usable. */ }
   }
@@ -203,18 +274,68 @@
     const saved = readCurrencyPreferences();
     const code = Marketplace.MARKETPLACES[saved.marketplace] ? saved.marketplace : Engine.DEFAULTS.marketplace;
     applyMarketplace(code, true);
-    if (Number(saved.exchangeRate) > 0) document.querySelector('#exchangeRate').value = saved.exchangeRate;
+    currentCurrency = Marketplace.getMarketplace(code).currency;
+    const manual = saved.manualExchangeRateEnabled === true && Number(saved.exchangeRate) > 0;
+    document.querySelector('#manualExchangeRateEnabled').checked = manual;
+    document.querySelector('#exchangeRate').readOnly = !manual;
+    if (manual) {
+      document.querySelector('#exchangeRate').value = saved.exchangeRate;
+      renderRateStatus(null, true);
+    }
     document.querySelector('#displayCurrency').value = saved.displayCurrency === 'CNY' ? 'CNY' : 'marketplace';
+    return { manual, currency: currentCurrency };
   }
 
-  initializeMarketplaceControls();
+  const initialFxState = initializeMarketplaceControls();
   document.querySelector('#marketplace').addEventListener('change', event => {
-    applyMarketplace(event.target.value, true);
+    const previousCurrency = currentCurrency;
+    const selected = Marketplace.getMarketplace(event.target.value);
+    const currencyChanged = previousCurrency !== selected.currency;
+    applyMarketplace(event.target.value, currencyChanged);
+    currentCurrency = selected.currency;
+    document.querySelector('#vatRate').value = selected.defaultVatRate;
+    if (currencyChanged) {
+      rateRequestToken += 1;
+      const manualToggle = document.querySelector('#manualExchangeRateEnabled');
+      const wasManual = manualToggle.checked;
+      manualToggle.checked = false;
+      document.querySelector('#exchangeRate').readOnly = true;
+      if (wasManual) showRateMessage('站点币种已变化，已恢复自动汇率。');
+      loadAutomaticRate(currentCurrency);
+    }
     saveCurrencyPreferences();
     calculateMain();
     if (scenarioGenerated) setScenarioOutdated(true);
   });
-  document.querySelector('#exchangeRate').addEventListener('input', saveCurrencyPreferences);
+  document.querySelector('#exchangeRate').addEventListener('input', () => {
+    const rate = Number(document.querySelector('#exchangeRate').value);
+    if (!document.querySelector('#manualExchangeRateEnabled').checked || !Number.isFinite(rate) || rate <= 0) return;
+    saveCurrencyPreferences(); calculateMain();
+    if (scenarioGenerated) setScenarioOutdated(true);
+  });
+  document.querySelector('#manualExchangeRateEnabled').addEventListener('change', event => {
+    const manual = event.target.checked;
+    document.querySelector('#exchangeRate').readOnly = !manual;
+    showRateMessage('');
+    if (manual) {
+      rateRequestToken += 1;
+      currentRateMeta = null;
+      renderRateStatus(null, true);
+      out('exchangeRateHint', '用于实际结算汇率、收款平台汇率或保守测算。');
+    } else {
+      out('exchangeRateHint', '自动汇率为市场参考汇率，不代表 Amazon、银行、Payoneer、WorldFirst、PingPong 等实际结算汇率。');
+      loadAutomaticRate(currentCurrency);
+    }
+    saveCurrencyPreferences(); calculateMain();
+    if (scenarioGenerated) setScenarioOutdated(true);
+  });
+  document.querySelector('#refreshExchangeRate').addEventListener('click', () => {
+    if (document.querySelector('#manualExchangeRateEnabled').checked) {
+      showRateMessage('关闭手动汇率后可更新自动汇率。');
+      return;
+    }
+    loadAutomaticRate(currentCurrency, true);
+  });
   document.querySelector('#displayCurrency').addEventListener('change', () => {
     saveCurrencyPreferences();
     calculateMain();
@@ -227,6 +348,9 @@
   });
   form.addEventListener('reset', () => requestAnimationFrame(() => {
     applyMarketplace(Engine.DEFAULTS.marketplace, true);
+    currentCurrency = Marketplace.getMarketplace(Engine.DEFAULTS.marketplace).currency;
+    document.querySelector('#manualExchangeRateEnabled').checked = false;
+    document.querySelector('#exchangeRate').readOnly = true;
     document.querySelector('#displayCurrency').value = 'marketplace';
     saveCurrencyPreferences();
     calculateMain();
@@ -250,4 +374,5 @@
 
   calculateMain();
   generateScenariosFromCurrent();
+  if (!initialFxState.manual) loadAutomaticRate(initialFxState.currency);
 })();

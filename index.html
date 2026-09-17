@@ -6,7 +6,7 @@
   <meta name="description" content="Amazon Seller Workbench 亚马逊选品与运营工作台">
   <title>Amazon Seller Workbench</title>
   <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="workbench.css?v=20260917-1">
+  <link rel="stylesheet" href="workbench.css?v=20260917-2">
 </head>
 <body>
   <main class="app-shell">
@@ -20,7 +20,7 @@
         <div class="field-grid marketplace-fields">
           <label class="field"><span>Amazon 站点</span><div class="input-wrap"><select id="marketplace"></select></div></label>
           <label class="field"><span>站点币种</span><div class="input-wrap readonly-value"><strong id="marketplaceCurrency">GBP</strong></div></label>
-          <label class="field"><span>汇率</span><div class="input-wrap exchange-rate-wrap"><span id="exchangeRatePrefix">1 GBP =</span><input id="exchangeRate" type="number" min="0.000001" step="0.001" value="9.6"><b>CNY</b></div><small>当前为手动汇率，可根据实际结算汇率修改</small></label>
+          <div class="field fx-field"><span>汇率</span><div class="input-wrap exchange-rate-wrap"><span id="exchangeRatePrefix">1 GBP =</span><input id="exchangeRate" type="number" min="0.000001" step="0.0001" value="9.6" readonly><b>CNY</b></div><div class="fx-status"><strong id="exchangeRateStatus">正在获取最新参考汇率…</strong><span id="exchangeRateDate">汇率数据日期：—</span><span id="exchangeRateFetchedAt">获取时间：—</span></div><button type="button" id="refreshExchangeRate" class="reset-button fx-refresh">刷新汇率</button><label class="fx-manual-toggle"><input id="manualExchangeRateEnabled" type="checkbox"> 使用手动汇率</label><small id="exchangeRateHint">自动汇率为市场参考汇率，不代表 Amazon、银行、Payoneer、WorldFirst、PingPong 等实际结算汇率。</small><div id="exchangeRateMessage" class="fx-message" hidden></div></div>
           <label class="field"><span>结果显示币种</span><div class="input-wrap"><select id="displayCurrency"><option value="marketplace" selected>站点币种</option><option value="CNY">CNY</option></select></div></label>
         </div>
 
@@ -142,9 +142,10 @@
   </main>
   <footer>亚马逊真实利润与风险模拟器 V2 · 仅供经营测算参考</footer>
   <script src="marketplace-config.js?v=20260917-1"></script>
-  <script src="product-record.js?v=20260917-1"></script>
+  <script src="exchange-rate-service.js?v=20260917-2"></script>
+  <script src="product-record.js?v=20260917-2"></script>
   <script src="calculator.js?v=20260917-1"></script>
-  <script src="script.js?v=20260917-1"></script>
+  <script src="script.js?v=20260917-2"></script>
   <script src="workbench.js?v=20260828-2"></script>
 </body>
 </html>

@@ -11,6 +11,10 @@
    * @property {string} marketplace
    * @property {string} currency
    * @property {number} exchangeRate
+   * @property {string=} exchangeRateSource
+   * @property {string=} exchangeRateDate
+   * @property {string=} exchangeRateFetchedAt
+   * @property {boolean=} manualExchangeRate
    * @property {string} title
    * @property {string} brand
    * @property {string} category
@@ -21,7 +25,7 @@
    * @property {{competitionScore:number|null,demandScore:number|null,vocScore:number|null,riskScore:number|null,opportunityScore:number|null}} analysis
    */
   const ProductRecordSchema = Object.freeze({
-    identity: Object.freeze(['id', 'asin', 'marketplace', 'currency', 'exchangeRate', 'title', 'brand', 'category', 'mainKeyword']),
+    identity: Object.freeze(['id', 'asin', 'marketplace', 'currency', 'exchangeRate', 'exchangeRateSource', 'exchangeRateDate', 'exchangeRateFetchedAt', 'manualExchangeRate', 'title', 'brand', 'category', 'mainKeyword']),
     marketData: Object.freeze(['price', 'monthlySales', 'monthlyRevenue', 'bsr', 'rating', 'reviewCount']),
     physical: Object.freeze(['length', 'width', 'height', 'weight']),
     profitInputs: Object.freeze(['productCost', 'packagingCost', 'inspectionCost', 'freight', 'duty', 'fbaFee', 'storageCost', 'returnRate', 'averageReturnLoss', 'referralFeeRate', 'vatRate', 'acos', 'cpc', 'cvr']),
@@ -36,7 +40,13 @@
     const exchangeRate = Number(record.exchangeRate) > 0
       ? Number(record.exchangeRate)
       : (config?.getDefaultExchangeRate?.(currency) || 9.6);
-    return { ...record, marketplace, currency, exchangeRate };
+    return {
+      ...record, marketplace, currency, exchangeRate,
+      exchangeRateSource: record.exchangeRateSource || null,
+      exchangeRateDate: record.exchangeRateDate || null,
+      exchangeRateFetchedAt: record.exchangeRateFetchedAt || null,
+      manualExchangeRate: Boolean(record.manualExchangeRate)
+    };
   }
 
   root.WorkbenchModels = Object.freeze({ ProductRecordSchema, normalizeProductRecord });
