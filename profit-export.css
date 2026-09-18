@@ -1,0 +1,1 @@
+.export-excel-button{border:1px solid rgba(255,255,255,.35);background:#fff;color:#245c47;border-radius:9px;padding:9px 14px;font-weight:800;cursor:pointer}.export-excel-button:hover{background:#ecf5f0}.export-excel-button:disabled{opacity:.45;cursor:not-allowed}@media(max-width:700px){.export-excel-button{width:100%}}

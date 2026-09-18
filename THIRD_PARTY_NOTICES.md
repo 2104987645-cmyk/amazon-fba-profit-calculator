@@ -1,5 +1,16 @@
 # Third-Party Notices
 
+## xlsx-js-style
+
+The profit report Excel export uses `xlsx-js-style` version 1.2.0, an
+Apache-2.0 licensed SheetJS-compatible browser library. Its distributable
+browser bundle is included locally at `xlsx.bundle.js` so report
+generation remains entirely in the browser and does not depend on a third-party
+CDN at runtime.
+
+Project: https://github.com/gitbrent/xlsx-js-style
+License: https://www.apache.org/licenses/LICENSE-2.0
+
 ## BWB03/inventory-dashboard
 
 The Inventory & Restock module includes adaptations inspired by

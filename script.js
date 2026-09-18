@@ -375,4 +375,27 @@
   calculateMain();
   generateScenariosFromCurrent();
   if (!initialFxState.manual) loadAutomaticRate(initialFxState.currency);
+
+  window.ProfitExportData = Object.freeze({
+    getSnapshot() {
+      const input = getBase();
+      const result = Engine.calculate(input);
+      const scenarios = Object.fromEntries(Object.keys(scenarioNames).map(key => {
+        const scenarioInput = { ...scenarioState[key] };
+        return [key, { name: scenarioNames[key], assumption: assumptionText(key), input: scenarioInput, result: Engine.calculate(scenarioInput) }];
+      }));
+      return {
+        input: { ...input }, result, scenarios,
+        sensitivity: Engine.sensitivity(input),
+        exchangeRate: {
+          rate: result.exchangeRate,
+          source: document.querySelector('#manualExchangeRateEnabled').checked ? '手动输入' : (currentRateMeta?.source || '备用汇率'),
+          date: document.querySelector('#manualExchangeRateEnabled').checked ? null : (currentRateMeta?.rateDate || null),
+          fetchedAt: currentRateMeta?.fetchedAt || null,
+          mode: document.querySelector('#manualExchangeRateEnabled').checked ? '手动' : '自动'
+        },
+        scenarioGenerated, scenarioAdjusted: { ...scenarioAdjusted }, generatedAt: new Date().toISOString()
+      };
+    }
+  });
 })();
