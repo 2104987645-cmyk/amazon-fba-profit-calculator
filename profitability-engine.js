@@ -109,18 +109,25 @@
       }
     });
     const items = [...grouped.values()].map(item => calculate(item, { ...DEFAULT_THRESHOLDS, ...thresholds }));
+    const summarize = group => {
+      const sum = field => group.reduce((s, i) => s + (i[field] || 0), 0);
+      const totalRevenue = sum('totalSales'), totalAdSales = sum('adSales'), totalAdSpend = sum('adSpend'), netProfit = sum('netProfit');
+      return { totalRevenue, totalAdSales, organicSales: Math.max(0, totalRevenue - totalAdSales), totalAdSpend, netProfit,
+        netMargin: totalRevenue > 0 ? netProfit / totalRevenue * 100 : null,
+        acos: totalAdSales > 0 ? totalAdSpend / totalAdSales * 100 : null,
+        tacos: totalRevenue > 0 ? totalAdSpend / totalRevenue * 100 : null,
+        profitableSkus: group.filter(i => i.netProfit != null && i.netProfit >= 0).length,
+        lossMakingSkus: group.filter(i => i.netProfit != null && i.netProfit < 0).length };
+    };
+    const marketplaceGroups = new Map();
+    items.forEach(item => { const key = item.marketplace || '未指定'; if (!marketplaceGroups.has(key)) marketplaceGroups.set(key, []); marketplaceGroups.get(key).push(item); });
+    const summaryByMarketplace = [...marketplaceGroups].map(([marketplace, group]) => ({ marketplace, ...summarize(group) }));
+    const summary = summaryByMarketplace.length === 1 ? summaryByMarketplace[0] : null;
     const sum = field => items.reduce((s, i) => s + (i[field] || 0), 0);
-    const totalRevenue = sum('totalSales'), totalAdSales = sum('adSales'), totalAdSpend = sum('adSpend'), netProfit = sum('netProfit');
-    const summary = { totalRevenue, totalAdSales, organicSales: Math.max(0, totalRevenue - totalAdSales), totalAdSpend, netProfit,
-      netMargin: totalRevenue > 0 ? netProfit / totalRevenue * 100 : null,
-      acos: totalAdSales > 0 ? totalAdSpend / totalAdSales * 100 : null,
-      tacos: totalRevenue > 0 ? totalAdSpend / totalRevenue * 100 : null,
-      profitableSkus: items.filter(i => i.netProfit != null && i.netProfit >= 0).length,
-      lossMakingSkus: items.filter(i => i.netProfit != null && i.netProfit < 0).length };
     const leakOverview = { totalIdentifiedLeak: sum('profitLeakAmount'), advertisingLeak: sum('advertisingLeak'), negativeMarginLoss: sum('negativeMarginLoss'), affectedSkus: items.filter(i => i.leaks.length).length };
     const health = ['healthy', 'warning', 'critical', 'no-ads', 'no-data'].reduce((a, key) => ({ ...a, [key]: items.filter(i => i.advertisingHealth === key).length }), {});
     const quality = { rowsImported: rows.length, skusProcessed: items.length, missingAdSales: items.filter(i => i.adSales == null).length, missingAdSpend: items.filter(i => i.adSpend == null).length, missingProductCost: items.filter(i => i.productCost == null).length, missingAmazonFees: items.filter(i => i.fbaFees == null || i.referralFees == null).length, duplicateSkusMerged: items.reduce((s, i) => s + i.duplicateCount, 0), warnings };
-    return { ok: true, items, summary, leakOverview, health, quality, mapping: detected.mapping };
+    return { ok: true, items, summary, summaryByMarketplace, mixedMarketplaces: summaryByMarketplace.length > 1, leakOverview, health, quality, mapping: detected.mapping };
   }
 
   function filterAndSort(items, filters = {}, sort = {}) {
