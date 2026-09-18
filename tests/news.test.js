@@ -1,0 +1,24 @@
+const assert = require('assert');
+require('../news-data.js');
+const createNewsModule = require('../news.js');
+const data = globalThis.AmazonNewsData;
+const news = createNewsModule(data);
+
+assert.strictEqual(data.length >= 8, true, '至少预置 8 条官方动态');
+assert.strictEqual(news.filterNews(data, { marketplace: 'US' }).every(x => x.marketplaces.includes('US') || x.marketplaces.includes('Global')), true, 'US 包含 US + Global');
+assert.strictEqual(news.filterNews(data, { category: 'fees' }).every(x => x.category === 'fees'), true, '费用筛选');
+assert.strictEqual(news.filterNews(data, { importance: 'high' }).every(x => x.importance === 'high'), true, '高优先级筛选');
+assert.strictEqual(news.filterNews(data, { query: 'FBA' }).length > 0, true, '搜索 FBA');
+assert.strictEqual(news.filterNews(data, { query: 'Featured Offer' }).length, 1, '搜索 Featured Offer');
+assert.strictEqual(data.every(x => news.isOfficialUrl(x.officialUrl)), true, '全部链接属于 Amazon 官方域名');
+assert.strictEqual(news.isOfficialUrl('https://example.com'), false, '拒绝非白名单域名');
+const malicious = Object.assign({}, data[0], { title: '<script>globalThis.pwned=true</script>' });
+assert.strictEqual(news.filterNews([malicious], { query: '<script>' }).length, 1, '恶意文本仅作为普通搜索文本');
+assert.strictEqual(news.filterNews(data, { query: '绝对不存在的内容' }).length, 0, '空筛选结果');
+const sorted = news.sortNews(data, 'latest');
+assert.deepStrictEqual(sorted.map(x => x.publishedAt), sorted.map(x => x.publishedAt).slice().sort().reverse(), '按发布日期倒序');
+assert.strictEqual(news.isStale({ lastVerifiedAt: '2025-01-01' }, '2026-09-18'), true, '超过 180 天提示重新核验');
+assert.strictEqual(news.validateNewsItem({ id: 'x' }).valid, false, '缺少字段时不通过校验但不抛错');
+assert.strictEqual(news.getLatestNews(3).length, 3, 'Dashboard 最新动态接口');
+assert.strictEqual(news.getHighPriorityNews(2).every(x => x.importance === 'high'), true, 'Dashboard 高优先级接口');
+console.log('news tests passed: 14');
