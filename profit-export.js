@@ -52,12 +52,10 @@
   }
 
   function summaryRows(s) {
-    const r = s.result, fx = s.exchangeRate, dual = r.currency !== 'CNY';
-    const rows = [['Amazon FBA 产品利润分析报告'], ['产品信息'], ...productRows(s.productInfo), ['报告信息'],
-      ['报告编号', reportId(s)], ['报告版本', REPORT_VERSION], ['生成来源', 'Amazon Seller Workbench'], ['生成时间', new Date(s.generatedAt)],
-      ['Amazon站点', r.marketplace], ['Marketplace Currency', r.currency], ['Exchange Rate', r.exchangeRate], ['Exchange Rate Source', show(fx.source)],
-      ['Exchange Rate Date', show(fx.date)], ['Exchange Rate Mode', show(fx.mode)], ['Exchange Rate Fetched At', fmtDateTime(fx.fetchedAt)], ['Exchange Rate Status', show(fx.status)],
-      [], dual ? ['核心结果', r.currency, 'CNY参考值'] : ['核心结果', 'CNY']];
+    const r = s.result, fx = s.exchangeRate, dual = r.currency !== 'CNY', info = s.productInfo || {};
+    const rows = [['Amazon FBA 产品利润分析报告'], ['产品基础信息'],
+      ['产品名称', 'SKU', 'ASIN', 'Amazon站点', '类目'], [show(info.name), show(info.sku), show(info.asin), r.marketplace, show(info.category)],
+      [], dual ? ['核心利润摘要', r.currency, 'CNY参考值'] : ['核心利润摘要', 'CNY']];
     const push = (label, value) => rows.push(dual ? [label, ...localAndCny(value, r)] : [label, value]);
     push('销售单价', r.input.sellingPrice);
     push('实际成交价（折后）', r.discountedSellingPrice);
@@ -71,38 +69,40 @@
     push('单件净利润', r.netProfitLocal);
     rows.push(['净利润率', r.netMargin / 100]);
     rows.push(['全成本投资回报率（ROI）', r.roi / 100]);
+    rows.push([], ['广告与盈亏平衡摘要', r.currency, dual ? 'CNY参考值' : '']);
     rows.push(['当前 ACoS', r.effectiveAcos == null ? null : r.effectiveAcos / 100]);
     rows.push(['目标 ACoS', r.targetAcos == null ? null : r.targetAcos / 100]);
     rows.push(['盈亏平衡 ACoS', r.breakEvenAcos / 100]);
     rows.push(['当前 ACoS 盈亏缓冲（百分点）', currentAcosBuffer(r)]);
     rows.push(['目标 ACoS 安全缓冲（百分点）', r.advertisingSafetyMargin]);
-    rows.push(['当前广告状态', adStatus(r)]);
     push('盈亏平衡 CPC', r.breakEvenCpc);
     push('盈亏平衡售价', r.breakEvenSellingPrice);
     rows.push(dual ? ['最大可承受单件采购成本', r.breakEvenProductCostLocal, r.breakEvenProductCostCny] : ['最大可承受单件采购成本', r.breakEvenProductCostCny]);
     push('最大可承受单笔广告成本', r.breakEvenAdvertisingCost);
-    rows.push([], ['数据完整性', '结果基于当前用户输入参数。'], ['测算说明', '本报告基于导出时页面参数生成，仅供经营测算参考。Amazon实际费用、税费、汇率、退货与广告表现可能变化。']);
+    rows.push(['当前广告状态', adStatus(r)]);
+    rows.push([], ['报告信息'], ['生成时间', 'Exchange Rate', 'Exchange Rate Source', '报告编号', '报告版本'], [new Date(s.generatedAt), r.exchangeRate, show(fx.source), reportId(s), REPORT_VERSION]);
     return rows;
   }
 
   function buildSummarySheet(s) {
-    const rows = summaryRows(s), dual = s.result.currency !== 'CNY', end = dual ? 2 : 1;
-    const ws = aoa(rows, dual ? [35, 22, 22] : [35, 24], 0);
-    ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: end } }];
-    styleRow(ws, 0, 0, end, titleStyle);
+    const rows = summaryRows(s), dual = s.result.currency !== 'CNY';
+    const ws = aoa(rows, [37, 22, 22, 25, 32], 0);
+    ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 4 } }];
+    styleRow(ws, 0, 0, 4, titleStyle);
     rows.forEach((row, r) => {
-      if (row.length === 1 && ['产品信息', '报告信息'].includes(row[0])) styleRow(ws, r, 0, end, sectionStyle);
-      if (row[0] === '核心结果') styleRow(ws, r, 0, end, headerStyle);
-      if (['单件净利润', '净利润率', '全成本投资回报率（ROI）'].includes(row[0])) styleRow(ws, r, 0, end, s.result.netProfitLocal >= 0 ? profitStyle : lossStyle);
+      if (row.length === 1 && ['产品基础信息', '报告信息'].includes(row[0])) styleRow(ws, r, 0, 4, sectionStyle);
+      if (['产品名称', '生成时间'].includes(row[0])) styleRow(ws, r, 0, 4, labelStyle);
+      if (['核心利润摘要', '广告与盈亏平衡摘要'].includes(row[0])) styleRow(ws, r, 0, 2, headerStyle);
+      if (['单件净利润', '净利润率', '全成本投资回报率（ROI）'].includes(row[0])) styleRow(ws, r, 0, 2, s.result.netProfitLocal >= 0 ? profitStyle : lossStyle);
       for (let c = 1; c < row.length; c++) {
         const x = cell(ws, r, c); if (!x || x.t !== 'n') continue;
         if (['毛利率', '净利润率', '全成本投资回报率（ROI）', '当前 ACoS', '目标 ACoS', '盈亏平衡 ACoS'].includes(row[0])) x.z = percentFmt;
-        else if (row[0].includes('百分点')) x.z = pointFmt;
+        else if (typeof row[0] === 'string' && row[0].includes('百分点')) x.z = pointFmt;
         else if (row[0] === 'Exchange Rate') x.z = rateFmt;
         else x.z = moneyFmt;
       }
-      if (row[0] === '备注' && cell(ws, r, 1)) cell(ws, r, 1).s = { alignment: { wrapText: true, vertical: 'top' }, fill: { fgColor: { rgb: 'F3F6F4' } } };
-      if (['生成时间', 'Exchange Rate Fetched At'].includes(row[0]) && cell(ws, r, 1)?.t === 'd') cell(ws, r, 1).z = 'yyyy-mm-dd hh:mm';
+      if (row[0] === 'Exchange Rate' && cell(ws, r, 1)?.t === 'n') cell(ws, r, 1).z = rateFmt;
+      if (row[0] instanceof Date && cell(ws, r, 0)?.t === 'd') cell(ws, r, 0).z = 'yyyy-mm-dd hh:mm';
     });
     return ws;
   }
@@ -110,7 +110,7 @@
   function buildInputsSheet(s) {
     const i = s.input, r = s.result, fx = s.exchangeRate;
     const rows = [['输入参数'], ['A. 产品信息'], ['字段', '数值', '单位/币种', '说明'], ...productRows(s.productInfo).map(x => [x[0], x[1], '', '']),
-      ['B. 站点与汇率'], ['Amazon站点', i.marketplace, '', ''], ['站点币种', r.currency, '', ''], ['汇率', i.exchangeRate, `1 ${r.currency} = X CNY`, fx.mode], ['汇率来源', show(fx.source), '', ''], ['汇率日期', show(fx.date), '', ''], ['汇率状态', show(fx.status), '', ''],
+      ['B. 站点与汇率'], ['Amazon站点', i.marketplace, '', ''], ['站点币种', r.currency, '', ''], ['汇率', i.exchangeRate, `1 ${r.currency} = X CNY`, ''], ['Exchange Rate Source', show(fx.source), '', ''], ['Exchange Rate Mode', show(fx.mode), '', ''], ['Exchange Rate Date', show(fx.date), '', ''], ['Exchange Rate Fetched At', fmtDateTime(fx.fetchedAt), '', ''], ['Exchange Rate Status', show(fx.status), '', ''],
       ['C. 收入与税费'], ['销售单价', i.sellingPrice, r.currency, 'Marketplace Currency'], ['折扣率', i.discountRate / 100, '%', ''], ['VAT / 销售税率', i.vatRate / 100, '%', '仅用于经营测算'], ['销售价格是否含VAT', i.includesVat ? '是' : '否', '', ''], ['Amazon销售佣金率', i.referralRate / 100, '%', ''],
       ['D. 中国端成本'], ['单件采购成本', i.productCost, 'CNY', ''], ['包装成本', i.packagingCost, 'CNY', ''], ['贴标成本', i.labelingCost, 'CNY', ''], ['验货成本', i.inspectionCost, 'CNY', ''], ['工具 / 模具摊销', i.toolingAmortization, 'CNY', ''], ['国际运费', i.freight, 'CNY', ''], ['关税', i.duty, 'CNY', ''], ['报关 / 清关费', i.customsClearance, 'CNY', ''],
       ['E. Amazon端成本'], ['FBA配送费', i.fbaFee, r.currency, '手动输入'], ['单件仓储成本', i.storageCost, r.currency, ''], ['其他变动成本', i.otherVariableCost, r.currency, ''],
@@ -190,11 +190,30 @@
     const ws = aoa(rows, [34, 92], 2); ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }]; styleRow(ws, 0, 0, 1, titleStyle); styleRow(ws, 1, 0, 1, headerStyle); for (let rr = 2; rr < rows.length; rr++) styleRow(ws, rr, 0, 0, labelStyle); return ws;
   }
 
+  function buildReportInfoSheet(s) {
+    const fx = s.exchangeRate;
+    const rows = [['报告信息'], ['项目', '内容'],
+      ['Report ID', reportId(s)], ['Report Version', REPORT_VERSION], ['Generated By', 'Amazon Seller Workbench'], ['生成时间', new Date(s.generatedAt)],
+      ['汇率来源', show(fx.source)], ['汇率模式', show(fx.mode)], ['汇率数据日期', show(fx.date)], ['汇率获取时间', fmtDateTime(fx.fetchedAt)], ['汇率状态', show(fx.status)],
+      ['数据完整性', '结果基于当前用户输入参数。'],
+      ['测算说明', '本报告基于导出时页面参数生成，仅供经营测算参考。Amazon实际费用、税费、汇率、退货与广告表现可能变化。'],
+      ['免责声明', '本报告为经营测算工具，不替代Amazon官方费用账单、财务会计或税务申报。']];
+    const ws = aoa(rows, [30, 100], 2);
+    ws['!merges'] = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 1 } }];
+    styleRow(ws, 0, 0, 1, titleStyle); styleRow(ws, 1, 0, 1, headerStyle);
+    for (let rr = 2; rr < rows.length; rr++) {
+      styleRow(ws, rr, 0, 0, labelStyle);
+      if (cell(ws, rr, 1)) cell(ws, rr, 1).s = { alignment: { wrapText: true, vertical: 'top' } };
+    }
+    [5, 9].forEach(rr => { if (cell(ws, rr, 1)?.t === 'd') cell(ws, rr, 1).z = 'yyyy-mm-dd hh:mm'; });
+    return ws;
+  }
+
   function buildWorkbook(snapshot) {
     if (!XLSX) throw new Error('Excel组件未加载');
     const wb = XLSX.utils.book_new();
     wb.Props = { Title: 'Amazon FBA 产品利润分析报告', Subject: reportId(snapshot), Author: 'Amazon Seller Workbench', CreatedDate: new Date(snapshot.generatedAt) };
-    [['利润摘要', buildSummarySheet(snapshot)], ['输入参数', buildInputsSheet(snapshot)], ['成本明细', buildCostSheet(snapshot)], ['盈亏平衡分析', buildBreakEvenSheet(snapshot)], ['情景分析', buildScenarioSheet(snapshot)], ['敏感性分析', buildSensitivitySheet(snapshot)], ['数据口径', buildDefinitionsSheet(snapshot)]].forEach(([name, ws]) => XLSX.utils.book_append_sheet(wb, ws, name));
+    [['利润摘要', buildSummarySheet(snapshot)], ['输入参数', buildInputsSheet(snapshot)], ['成本明细', buildCostSheet(snapshot)], ['盈亏平衡分析', buildBreakEvenSheet(snapshot)], ['情景分析', buildScenarioSheet(snapshot)], ['敏感性分析', buildSensitivitySheet(snapshot)], ['数据口径', buildDefinitionsSheet(snapshot)], ['报告信息', buildReportInfoSheet(snapshot)]].forEach(([name, ws]) => XLSX.utils.book_append_sheet(wb, ws, name));
     return wb;
   }
   function cleanPart(value, max = 40) { return String(value || '').trim().replace(/[\\/:*?"<>|]+/g, '-').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, max); }
@@ -235,6 +254,6 @@
     document.querySelector('#profit-form')?.addEventListener('input', () => updateButton(button));
     updateButton(button);
   }
-  root.ProfitExcelExporter = Object.freeze({ buildWorkbook, buildSummarySheet, buildInputsSheet, buildCostSheet, buildBreakEvenSheet, buildScenarioSheet, buildSensitivitySheet, buildDefinitionsSheet, buildFilename, reportId, exportProfitWorkbook });
+  root.ProfitExcelExporter = Object.freeze({ buildWorkbook, buildSummarySheet, buildInputsSheet, buildCostSheet, buildBreakEvenSheet, buildScenarioSheet, buildSensitivitySheet, buildDefinitionsSheet, buildReportInfoSheet, buildFilename, reportId, exportProfitWorkbook });
   initialize();
 })(typeof globalThis !== 'undefined' ? globalThis : this);
