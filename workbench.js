@@ -91,7 +91,7 @@
   }
 
   function currentPath() {
-    const path = location.hash.replace(/^#/, '') || '/';
+    const path = (location.hash.replace(/^#/, '') || '/').split('?')[0];
     return routes[path] ? path : '/';
   }
 
@@ -114,7 +114,7 @@
     view.querySelectorAll('.route-page:not(#profitModule)').forEach(node => node.remove());
     if (route.type === 'dashboard') {
       view.insertAdjacentHTML('afterbegin', dashboardMarkup());
-      if (window.DashboardIntelligence) window.DashboardIntelligence.mount(view.querySelector('#dashboardIntelligence'), window.NewsModule);
+      if (window.DashboardIntelligence) window.DashboardIntelligence.mount(view.querySelector('#dashboardIntelligence'), window.NewsModule, window.NewsActionState);
     }
     else if (route.type === 'inventory') {
       const inventoryHost = document.createElement('div');

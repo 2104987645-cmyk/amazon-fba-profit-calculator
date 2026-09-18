@@ -17,6 +17,12 @@
 
 Dashboard 首页通过 `NewsModule.getHighPriorityNews(3)` 和 `NewsModule.getLatestNews(5)` 展示精简的运营情报摘要；完整内容仍统一进入 `#/news` 查看。
 
+## Seller Intelligence V2
+
+Dashboard 的 Action Center 将需要处理的 Amazon 官方动态转化为行动事项，支持行动按钮、受影响业务模块跳转、标记已处理、查看已处理及恢复待处理。处理状态以新闻稳定 `id` 为键保存在浏览器 `localStorage` 的 `sellerWorkbench.newsStatus` 中。
+
+News Center 支持 `importance`、`marketplace`、`category` 和 `module` 深度链接筛选，例如 `#/news?importance=high` 与 `#/news?module=profit`。新闻数据当前仍为人工维护；行动状态仅保存在当前浏览器，不会在不同设备之间同步。
+
 ## 广告与利润分析模块
 
 访问 `#/profitability`。支持直接导入 Amazon Seller Central Business Report、Amazon Ads Advertised Product Report、Amazon Payments Transaction / Date Range Report，以及用户维护的 Product Cost CSV。系统自动识别报表、支持手动字段映射，并通过 SKU / ASIN 交叉映射合并数据。

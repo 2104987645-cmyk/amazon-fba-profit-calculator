@@ -18,7 +18,26 @@
 
   let data = Array.isArray(initialData) ? initialData.slice() : [];
   let host = null;
-  let state = { marketplace: 'all', category: 'all', importance: 'all', action: 'all', source: 'all', status: 'all', query: '', sort: 'latest' };
+  const validValues = {
+    marketplace: ['Global', 'US', 'UK', 'EU', 'DE', 'FR', 'IT', 'ES', 'CA', 'AU', 'JP'],
+    category: Object.keys(labels.category), importance: ['high', 'medium', 'low'],
+    action: Object.keys(labels.action), source: Object.keys(labels.source), status: Object.keys(labels.status)
+  };
+  let state = { marketplace: 'all', category: 'all', importance: 'all', action: 'all', source: 'all', status: 'all', module: 'all', query: '', sort: 'latest' };
+
+  function getActionLevel(item) {
+    if (typeof item.actionRequired === 'string') return item.actionRequired;
+    return item.actionLevel || (item.actionRequired === true ? 'required' : 'info');
+  }
+
+  function parseHashFilters(hash) {
+    const value = String(hash === undefined ? (typeof location !== 'undefined' ? location.hash : '') : hash);
+    const query = value.includes('?') ? value.slice(value.indexOf('?') + 1) : '';
+    const params = new URLSearchParams(query); const result = {};
+    Object.keys(validValues).forEach(key => { const candidate = params.get(key); if (candidate && validValues[key].includes(candidate)) result[key] = candidate; });
+    const module = params.get('module'); if (module && ['profit', 'profitability', 'inventory', 'news', 'knowledge'].includes(module)) result.module = module;
+    return result;
+  }
 
   function isOfficialUrl(value) {
     try {
@@ -61,9 +80,11 @@
       const marketMatch = f.marketplace === 'all' || markets.includes(f.marketplace) || (f.marketplace !== 'Global' && markets.includes('Global'));
       return marketMatch && (f.category === 'all' || item.category === f.category) &&
         (f.importance === 'all' || item.importance === f.importance) &&
-        (f.action === 'all' || item.actionRequired === f.action) &&
+        (f.action === 'all' || getActionLevel(item) === f.action) &&
         (f.source === 'all' || item.sourceType === f.source) &&
-        (f.status === 'all' || computedStatus(item) === f.status) && (!q || searchableText(item).includes(q));
+        (f.status === 'all' || computedStatus(item) === f.status) &&
+        (f.module === 'all' || (item.affectedModules || []).includes(f.module)) &&
+        (!q || searchableText(item).includes(q));
     });
   }
 
@@ -96,7 +117,8 @@
     top.append(el('span', 'news-badge importance', labels.importance[item.importance] + '优先级'));
     (item.marketplaces || []).forEach(m => top.append(el('span', 'news-badge marketplace', m)));
     top.append(el('span', 'news-badge category', labels.category[item.category] || item.category));
-    top.append(el('span', 'news-badge action action-' + item.actionRequired, labels.action[item.actionRequired] || item.actionRequired));
+    const actionLevel = getActionLevel(item);
+    top.append(el('span', 'news-badge action action-' + actionLevel, labels.action[actionLevel] || actionLevel));
     card.append(top, el('h3', '', item.title));
     const date = el('p', 'news-date', '发布：' + item.publishedAt + '　最后核验：' + item.lastVerifiedAt);
     card.append(date, el('p', 'news-summary', item.summary));
@@ -132,13 +154,14 @@
   }
 
   function resetFilters() {
-    state = { marketplace: 'all', category: 'all', importance: 'all', action: 'all', source: 'all', status: 'all', query: '', sort: 'latest' };
+    state = { marketplace: 'all', category: 'all', importance: 'all', action: 'all', source: 'all', status: 'all', module: 'all', query: '', sort: 'latest' };
     host.querySelectorAll('[data-news-filter]').forEach(input => { input.value = state[input.dataset.newsFilter]; }); renderResults();
   }
 
   function mount(target) {
     host = target; host.classList.add('news-page'); host.replaceChildren();
     if (!data.length) { host.append(el('div', 'news-load-error', '官方动态数据暂时无法加载。')); return; }
+    state = Object.assign({ marketplace: 'all', category: 'all', importance: 'all', action: 'all', source: 'all', status: 'all', module: 'all', query: '', sort: 'latest' }, parseHashFilters());
     data.forEach(validateNewsItem);
     const header = el('header', 'news-header'); header.append(el('p', 'news-eyebrow', 'KNOWLEDGE & INTELLIGENCE'), el('h1', '', 'Amazon政策与运营动态'), el('span', 'news-en-title', 'Amazon Policy & Seller Updates'), el('p', 'news-subtitle', '聚合 Amazon 官方卖家政策、费用、履约、账户健康、广告与平台功能更新。'), el('div', 'news-official-note', '✓ 本模块仅收录 Amazon 官方来源，不使用社区或第三方信息。')); host.append(header);
     const stats = el('section', 'news-stats'); statsMarkup().forEach(stat => { const box = el('article'); box.append(el('span', '', stat.label), el('strong', '', String(stat.value))); stats.append(box); }); host.append(stats);
@@ -152,7 +175,7 @@
       ['status', '状态', [['all','全部'], ...Object.entries(labels.status)]],
       ['sort', '排序', [['latest','发布时间倒序'],['importance','重要程度']]]
     ];
-    filterDefs.forEach(def => { const label = el('label'); label.append(el('span', '', def[1])); const select = el('select'); select.dataset.newsFilter = def[0]; def[2].forEach(option => addOption(select, option[0], option[1])); label.append(select); filters.append(label); });
+    filterDefs.forEach(def => { const label = el('label'); label.append(el('span', '', def[1])); const select = el('select'); select.dataset.newsFilter = def[0]; def[2].forEach(option => addOption(select, option[0], option[1])); select.value = state[def[0]]; label.append(select); filters.append(label); });
     const searchLabel = el('label', 'news-search'); searchLabel.append(el('span', '', '搜索')); const input = el('input'); input.type = 'search'; input.placeholder = '搜索 FBA fee、标题、Featured Offer…'; input.dataset.newsFilter = 'query'; searchLabel.append(input); filters.prepend(searchLabel); host.append(filters);
     filters.addEventListener('input', event => { const key = event.target.dataset.newsFilter; if (!key) return; state[key] = event.target.value; renderResults(); });
     const bar = el('div', 'news-result-bar'); bar.append(el('strong', '', '官方动态'), el('span', '', '')); bar.lastChild.dataset.newsCount = ''; host.append(bar);
@@ -163,5 +186,5 @@
 
   function unmount() { host = null; }
   function setData(items) { data = Array.isArray(items) ? items.slice() : []; }
-  return { mount, unmount, setData, validateNewsItem, isOfficialUrl, filterNews, sortNews, isStale, computedStatus, getLatestNews, getHighPriorityNews, OFFICIAL_DOMAINS: OFFICIAL_DOMAINS.slice() };
+  return { mount, unmount, setData, validateNewsItem, isOfficialUrl, filterNews, sortNews, isStale, computedStatus, getActionLevel, parseHashFilters, getLatestNews, getHighPriorityNews, OFFICIAL_DOMAINS: OFFICIAL_DOMAINS.slice() };
 });
