@@ -12,6 +12,7 @@
     '/profit': { type: 'profit', title: 'FBA真实利润模拟器', topbar: '利润与风险', context: 'FBA Profit Simulator' },
     '/profitability': { type: 'profitability', title: '广告与利润分析', topbar: '广告与利润', context: 'Advertising & Profitability' },
     '/inventory': { type: 'inventory', title: '库存与补货分析', topbar: '库存与补货', context: 'Inventory & Restock' },
+    '/news': { type: 'news', title: 'Amazon政策与运营动态', topbar: '政策与运营动态', context: 'Amazon Policy & Seller Updates' },
     '/decision': { title: '决策中心', description: '未来汇总市场、竞争、VOC、利润和风险信息，形成统一选品决策。' },
     '/data/import': { title: '数据导入', description: '未来用于导入产品、市场和经营数据，并映射到统一 ProductRecord。' }
   };
@@ -40,6 +41,7 @@
         <div class="nav-group"><p>产品研究</p><a href="#/products" data-route="/products">候选产品库<em>即将推出</em></a><a href="#/products/competitors" data-route="/products/competitors">竞品 / ASIN<em>即将推出</em></a><a href="#/products/voc" data-route="/products/voc">VOC 评论分析<em>即将推出</em></a><a href="#/products/lifecycle" data-route="/products/lifecycle">生命周期分析<em>即将推出</em></a></div>
         <div class="nav-group"><p>利润与风险</p><a href="#/profit" data-route="/profit">FBA真实利润模拟器<span class="available-dot">可用</span></a><a href="#/profitability" data-route="/profitability">广告与利润分析<span class="available-dot">可用</span><small>Advertising &amp; Profitability</small></a></div>
         <div class="nav-group"><p>运营管理</p><a href="#/inventory" data-route="/inventory">库存与补货分析<span class="available-dot">可用</span><small>Inventory &amp; Restock</small></a></div>
+        <div class="nav-group"><p>知识与情报</p><a href="#/knowledge" data-route="/knowledge">Amazon运营知识库<em>即将推出</em></a><a href="#/news" data-route="/news">Amazon政策与运营动态<span class="available-dot">可用</span><small>Policy &amp; Seller Updates</small></a></div>
         <a href="#/decision" data-route="/decision"><b>05</b><span>决策中心<small>即将推出</small></span></a>
         <div class="nav-group"><p>数据管理</p><a href="#/data/import" data-route="/data/import">数据导入<em>即将推出</em></a></div>
       </nav>
@@ -107,6 +109,7 @@
     profitHost.hidden = route.type !== 'profit';
     if (window.InventoryModule) window.InventoryModule.unmount();
     if (window.ProfitabilityModule) window.ProfitabilityModule.unmount();
+    if (window.NewsModule) window.NewsModule.unmount();
     view.querySelectorAll('.route-page:not(#profitModule)').forEach(node => node.remove());
     if (route.type === 'dashboard') view.insertAdjacentHTML('afterbegin', dashboardMarkup());
     else if (route.type === 'inventory') {
@@ -122,6 +125,13 @@
       profitabilityHost.className = 'route-page';
       view.prepend(profitabilityHost);
       window.ProfitabilityModule.mount(profitabilityHost);
+    }
+    else if (route.type === 'news') {
+      const newsHost = document.createElement('div');
+      newsHost.id = 'newsModule';
+      newsHost.className = 'route-page';
+      view.prepend(newsHost);
+      window.NewsModule.mount(newsHost);
     }
     else if (route.type !== 'profit') view.insertAdjacentHTML('afterbegin', placeholderMarkup(route));
     closeMenu();

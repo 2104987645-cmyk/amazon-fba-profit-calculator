@@ -7,6 +7,13 @@
 - FBA真实利润模拟器：利润、广告盈亏、情景和敏感性分析。
 - 库存与补货分析：导入 Amazon Seller Central 的 FBA/AWD CSV 报告，合并库存并识别缺货与积压风险。
 - 广告与利润分析：导入周期汇总 CSV，按 SKU 分析 P&L、ACoS、TACoS、Break-even ACoS 和 Profit Leak。
+- Amazon政策与运营动态：集中查看 Amazon 官方卖家政策、费用、履约、Listing、合规和平台功能更新。
+
+## Amazon政策与运营动态
+
+访问 `#/news`。V1 使用结构化、人工维护的数据文件，仅收录 Amazon 官方来源，不采集社区、媒体或第三方内容，也不会自动抓取网页。每条内容都保留 Amazon 官方原文链接、发布日期和最后人工核验日期。
+
+页面内容用于卖家运营参考；政策、费用和功能可能持续调整，具体规则以 Amazon 官方原文和 Seller Central 实际通知为准。
 
 ## 广告与利润分析模块
 
