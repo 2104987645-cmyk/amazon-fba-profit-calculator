@@ -19,6 +19,7 @@
    * @property {string} brand
    * @property {string} category
    * @property {string} mainKeyword
+   * @property {{name:string,sku:string,asin:string,category:string,supplier:string,notes:string}} productInfo
    * @property {{price:number|null,monthlySales:number|null,monthlyRevenue:number|null,bsr:number|null,rating:number|null,reviewCount:number|null}} marketData
    * @property {{length:number|null,width:number|null,height:number|null,weight:number|null}} physical
    * @property {{productCost:number|null,packagingCost:number|null,inspectionCost:number|null,freight:number|null,duty:number|null,fbaFee:number|null,storageCost:number|null,returnRate:number|null,averageReturnLoss:number|null,referralFeeRate:number|null,vatRate:number|null,acos:number|null,cpc:number|null,cvr:number|null}} profitInputs
@@ -28,6 +29,7 @@
    */
   const ProductRecordSchema = Object.freeze({
     identity: Object.freeze(['id', 'asin', 'marketplace', 'currency', 'exchangeRate', 'exchangeRateSource', 'exchangeRateDate', 'exchangeRateFetchedAt', 'manualExchangeRate', 'title', 'brand', 'category', 'mainKeyword']),
+    productInfo: Object.freeze(['name', 'sku', 'asin', 'category', 'supplier', 'notes']),
     marketData: Object.freeze(['price', 'monthlySales', 'monthlyRevenue', 'bsr', 'rating', 'reviewCount']),
     physical: Object.freeze(['length', 'width', 'height', 'weight']),
     profitInputs: Object.freeze(['productCost', 'packagingCost', 'inspectionCost', 'freight', 'duty', 'fbaFee', 'storageCost', 'returnRate', 'averageReturnLoss', 'referralFeeRate', 'vatRate', 'acos', 'cpc', 'cvr']),
@@ -44,8 +46,18 @@
     const exchangeRate = Number(record.exchangeRate) > 0
       ? Number(record.exchangeRate)
       : (config?.getDefaultExchangeRate?.(currency) || 9.6);
+    const sourceProductInfo = record.productInfo && typeof record.productInfo === 'object' ? record.productInfo : {};
+    const productInfo = {
+      name: String(sourceProductInfo.name ?? record.title ?? ''),
+      sku: String(sourceProductInfo.sku ?? record.sku ?? ''),
+      asin: String(sourceProductInfo.asin ?? record.asin ?? ''),
+      category: String(sourceProductInfo.category ?? record.category ?? ''),
+      supplier: String(sourceProductInfo.supplier ?? record.supplier ?? ''),
+      notes: String(sourceProductInfo.notes ?? record.notes ?? '')
+    };
     return {
       ...record, marketplace, currency, exchangeRate,
+      productInfo,
       exchangeRateSource: record.exchangeRateSource || null,
       exchangeRateDate: record.exchangeRateDate || null,
       exchangeRateFetchedAt: record.exchangeRateFetchedAt || null,

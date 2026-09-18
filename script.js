@@ -13,6 +13,7 @@
     return moneyFormatters[currency].format(value);
   };
   const inputIds = Object.keys(Engine.DEFAULTS);
+  const productInfoFields = Object.freeze({ productName: 'name', productSku: 'sku', productAsin: 'asin', productCategory: 'category', supplierName: 'supplier', productNotes: 'notes' });
   const scenarioFields = ['sellingPrice', 'productCost', 'freight', 'acos', 'returnRate', 'cvr'];
   const scenarioNames = { base: '基础情景', conservative: '保守情景', stress: '压力情景' };
   const scenarioLabels = { sellingPrice: '销售单价', productCost: '产品成本', freight: '国际运费', acos: 'ACoS（%）', returnRate: '退货率（%）', cvr: '转化率（%）' };
@@ -23,11 +24,11 @@
   };
   const sensitivityLabels = { sellingPrice: '销售单价', productCost: '产品成本', freight: '国际运费', acos: '广告成本销售比（ACoS）', returnRate: '退货率' };
   const costLabels = {
-    productCost: '产品成本', packagingCost: '包装成本', labelingCost: '贴标成本',
+    productCost: '单件采购成本', packagingCost: '包装成本', labelingCost: '贴标成本',
     inspectionCost: '验货成本', toolingAmortization: '工具 / 模具摊销',
     freight: '国际运费', duty: '关税', customsClearance: '报关 / 清关费',
-    referralFee: '亚马逊销售佣金', fbaFee: 'FBA 配送费', storageCost: '仓储成本',
-    advertisingCost: '广告成本', returnLoss: '退货损耗', otherVariableCost: '其他变动成本', vat: '增值税 / 税费'
+    referralFee: '亚马逊销售佣金', fbaFee: 'FBA 配送费', storageCost: '单件仓储成本',
+    advertisingCost: '广告成本', returnLoss: '预估退货损失', otherVariableCost: '其他变动成本', vat: 'VAT / 销售税预估'
   };
   let scenarioState;
   let scenarioGenerated = false;
@@ -45,6 +46,7 @@
     if (id === 'includesVat') return [id, value === 'true'];
     return [id, Math.max(0, Number(value) || 0)];
   }));
+  const getProductInfo = () => Object.fromEntries(Object.entries(productInfoFields).map(([id, key]) => [key, String(document.querySelector(`#${id}`)?.value || '').trim()]));
   const out = (id, value) => { const node = document.querySelector(`#${id}`); if (node) node.textContent = value; };
   const displayMode = () => document.querySelector('#displayCurrency').value;
   const displayAmount = (localValue, result) => displayMode() === 'CNY'
@@ -138,7 +140,7 @@
     const returnWarning = document.querySelector('#returnLossWarning');
     const returnModelNeedsInput = r.input.returnRate > 0 && r.input.averageLossPerReturn === 0;
     returnWarning.hidden = !returnModelNeedsInput;
-    returnWarning.textContent = returnModelNeedsInput ? `当前平均每次退货损失为 ${amount(0, r.currency)}，因此退货率不会影响利润。若存在退款不可追回、FBA处理费、退货运费、商品折损或不可售损失，请填写平均每次退货损失。` : '';
+    returnWarning.textContent = returnModelNeedsInput ? `当前平均单次退货损失为 ${amount(0, r.currency)}，因此退货率不会影响利润。若存在退款不可追回、FBA处理费、退货运费、商品折损或不可售损失，请填写平均单次退货损失。` : '';
     const status = document.querySelector('#profitStatus');
     status.textContent = r.netProfit >= 0 ? '盈利' : '亏损';
     status.classList.toggle('loss', r.netProfit < 0);
@@ -150,7 +152,7 @@
     const returnModelDisabled = Number(base.averageLossPerReturn) === 0;
     const returnSensitivityWarning = document.querySelector('#returnSensitivityWarning');
     returnSensitivityWarning.hidden = !returnModelDisabled;
-    returnSensitivityWarning.textContent = returnModelDisabled ? `当前退货损失模型未启用：平均每次退货损失为 ${amount(0, analysis.base.currency)}，不同退货率不会改变利润。` : '';
+    returnSensitivityWarning.textContent = returnModelDisabled ? `当前退货损失模型未启用：平均单次退货损失为 ${amount(0, analysis.base.currency)}，不同退货率不会改变利润。` : '';
     document.querySelector('#impact-callout').innerHTML = `<span>利润影响最大变量</span><strong>${sensitivityLabels[analysis.largestImpactVariable]}</strong><p>以测试范围内相对基础情景的最大绝对利润变化判断。</p>`;
     document.querySelector('#sensitivity-body').innerHTML = analysis.rows.map(row => {
       const inactiveReturnModel = returnModelDisabled && row.variable === 'returnRate';
@@ -247,7 +249,8 @@
         manualExchangeRateEnabled: document.querySelector('#manualExchangeRateEnabled').checked,
         exchangeRateSource: currentRateMeta?.source || null,
         exchangeRateDate: currentRateMeta?.rateDate || null,
-        exchangeRateFetchedAt: currentRateMeta?.fetchedAt || null
+        exchangeRateFetchedAt: currentRateMeta?.fetchedAt || null,
+        productInfo: getProductInfo()
       }));
     } catch (_) { /* Storage can be unavailable in privacy mode; calculation remains usable. */ }
   }
@@ -272,6 +275,8 @@
     marketplaceSelect.innerHTML = Object.values(Marketplace.MARKETPLACES).map(item =>
       `<option value="${item.code}">${item.name} · ${item.domain}</option>`).join('');
     const saved = readCurrencyPreferences();
+    const normalizedRecord = window.WorkbenchModels?.normalizeProductRecord?.({ productInfo: saved.productInfo }) || { productInfo: saved.productInfo || {} };
+    Object.entries(productInfoFields).forEach(([id, key]) => { document.querySelector(`#${id}`).value = normalizedRecord.productInfo?.[key] || ''; });
     const code = Marketplace.MARKETPLACES[saved.marketplace] ? saved.marketplace : Engine.DEFAULTS.marketplace;
     applyMarketplace(code, true);
     currentCurrency = Marketplace.getMarketplace(code).currency;
@@ -343,6 +348,7 @@
   });
 
   form.addEventListener('input', event => {
+    if (event.target.id in productInfoFields) saveCurrencyPreferences();
     calculateMain();
     if (scenarioGenerated && event.target.id !== 'displayCurrency') setScenarioOutdated(true);
   });
@@ -385,14 +391,15 @@
         return [key, { name: scenarioNames[key], assumption: assumptionText(key), input: scenarioInput, result: Engine.calculate(scenarioInput) }];
       }));
       return {
-        input: { ...input }, result, scenarios,
+        productInfo: getProductInfo(), input: { ...input }, result, scenarios,
         sensitivity: Engine.sensitivity(input),
         exchangeRate: {
           rate: result.exchangeRate,
           source: document.querySelector('#manualExchangeRateEnabled').checked ? '手动输入' : (currentRateMeta?.source || '备用汇率'),
           date: document.querySelector('#manualExchangeRateEnabled').checked ? null : (currentRateMeta?.rateDate || null),
           fetchedAt: currentRateMeta?.fetchedAt || null,
-          mode: document.querySelector('#manualExchangeRateEnabled').checked ? '手动' : '自动'
+          mode: document.querySelector('#manualExchangeRateEnabled').checked ? '手动' : '自动',
+          status: document.querySelector('#manualExchangeRateEnabled').checked ? '手动' : currentRateMeta?.isFallback ? '备用' : currentRateMeta?.fromCache ? '缓存' : '最新参考'
         },
         scenarioGenerated, scenarioAdjusted: { ...scenarioAdjusted }, generatedAt: new Date().toISOString()
       };
