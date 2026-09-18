@@ -31,3 +31,15 @@ inventory summary, chart lifecycle, and reset-flow concepts. Its field-mapping
 layer, Map-based merge engine, data-quality reporting, risk thresholds,
 filtering, pagination, XSS-safe rendering, and Seller Workbench visual design
 are new implementations for this project.
+
+## sellerviewAI/amazon-profit-calculator
+
+The Advertising & Profitability module is an independent implementation
+inspired by the publicly documented product concepts in the README of
+`sellerviewAI/amazon-profit-calculator`, including SKU-level P&L, ACoS,
+TACoS, break-even ACoS, and profit-leak visibility.
+
+At the time of review, the referenced repository provided README and license
+guidance rather than calculator source code suitable for reuse. No source code
+was copied from that repository. This Workbench module uses its own data model,
+Chinese operating workflow, UI, CSV mapping layer, and calculation engine.

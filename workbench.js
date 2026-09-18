@@ -10,6 +10,7 @@
     '/products/voc': { title: 'VOC 评论分析', description: '分析竞品评论中的高频痛点、购买动机、差评原因和产品改进机会。' },
     '/products/lifecycle': { title: '生命周期分析', description: '结合历史销量、BSR、关键词趋势等数据判断产品和市场生命周期。' },
     '/profit': { type: 'profit', title: 'FBA真实利润模拟器', topbar: '利润与风险', context: 'FBA Profit Simulator' },
+    '/profitability': { type: 'profitability', title: '广告与利润分析', topbar: '广告与利润', context: 'Advertising & Profitability' },
     '/inventory': { type: 'inventory', title: '库存与补货分析', topbar: '库存与补货', context: 'Inventory & Restock' },
     '/decision': { title: '决策中心', description: '未来汇总市场、竞争、VOC、利润和风险信息，形成统一选品决策。' },
     '/data/import': { title: '数据导入', description: '未来用于导入产品、市场和经营数据，并映射到统一 ProductRecord。' }
@@ -22,7 +23,8 @@
     ['04', 'FBA真实利润模拟器', 'FBA Profit Simulator', '计算真实单件利润、利润率、ROI、广告盈亏平衡和压力测试。', '/profit', true],
     ['05', '生命周期分析', 'Lifecycle Analysis', '结合历史销量、BSR、关键词趋势等数据判断产品和市场生命周期。', '/products/lifecycle', false],
     ['06', '库存与补货分析', 'Inventory & Restock', '合并 FBA 与 AWD 库存报告，识别缺货、补货与积压风险。', '/inventory', true],
-    ['07', '决策中心', 'Decision Center', '未来汇总市场、竞争、VOC、利润和风险信息形成统一选品决策。', '/decision', false]
+    ['07', '广告与利润分析', 'Advertising & Profitability', '按 SKU 分析 ACoS、TACoS、利润与可量化利润流失。', '/profitability', true],
+    ['08', '决策中心', 'Decision Center', '未来汇总市场、竞争、VOC、利润和风险信息形成统一选品决策。', '/decision', false]
   ];
 
   const calculator = document.querySelector('.app-shell');
@@ -36,7 +38,7 @@
         <a href="#/" data-route="/"><b>01</b><span>工作台<small>Dashboard</small></span></a>
         <div class="nav-group"><p>选品研究</p><a href="#/research/batch" data-route="/research/batch">批量选品分析<em>即将推出</em></a><a href="#/research/market" data-route="/research/market">市场研究<em>即将推出</em></a></div>
         <div class="nav-group"><p>产品研究</p><a href="#/products" data-route="/products">候选产品库<em>即将推出</em></a><a href="#/products/competitors" data-route="/products/competitors">竞品 / ASIN<em>即将推出</em></a><a href="#/products/voc" data-route="/products/voc">VOC 评论分析<em>即将推出</em></a><a href="#/products/lifecycle" data-route="/products/lifecycle">生命周期分析<em>即将推出</em></a></div>
-        <div class="nav-group"><p>利润与风险</p><a href="#/profit" data-route="/profit">FBA真实利润模拟器<span class="available-dot">可用</span></a></div>
+        <div class="nav-group"><p>利润与风险</p><a href="#/profit" data-route="/profit">FBA真实利润模拟器<span class="available-dot">可用</span></a><a href="#/profitability" data-route="/profitability">广告与利润分析<span class="available-dot">可用</span><small>Advertising &amp; Profitability</small></a></div>
         <div class="nav-group"><p>运营管理</p><a href="#/inventory" data-route="/inventory">库存与补货分析<span class="available-dot">可用</span><small>Inventory &amp; Restock</small></a></div>
         <a href="#/decision" data-route="/decision"><b>05</b><span>决策中心<small>即将推出</small></span></a>
         <div class="nav-group"><p>数据管理</p><a href="#/data/import" data-route="/data/import">数据导入<em>即将推出</em></a></div>
@@ -104,6 +106,7 @@
     document.querySelectorAll('[data-route]').forEach(link => link.classList.toggle('active', link.dataset.route === path));
     profitHost.hidden = route.type !== 'profit';
     if (window.InventoryModule) window.InventoryModule.unmount();
+    if (window.ProfitabilityModule) window.ProfitabilityModule.unmount();
     view.querySelectorAll('.route-page:not(#profitModule)').forEach(node => node.remove());
     if (route.type === 'dashboard') view.insertAdjacentHTML('afterbegin', dashboardMarkup());
     else if (route.type === 'inventory') {
@@ -112,6 +115,13 @@
       inventoryHost.className = 'route-page';
       view.prepend(inventoryHost);
       window.InventoryModule.mount(inventoryHost);
+    }
+    else if (route.type === 'profitability') {
+      const profitabilityHost = document.createElement('div');
+      profitabilityHost.id = 'profitabilityModule';
+      profitabilityHost.className = 'route-page';
+      view.prepend(profitabilityHost);
+      window.ProfitabilityModule.mount(profitabilityHost);
     }
     else if (route.type !== 'profit') view.insertAdjacentHTML('afterbegin', placeholderMarkup(route));
     closeMenu();
