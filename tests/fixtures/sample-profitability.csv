@@ -1,0 +1,4 @@
+sku,asin,productName,marketplace,unitsSold,totalSales,adSales,adSpend,productCost,fbaFees,referralFees,storageFees,returnCost,otherCosts
+SKU-A,B0DEMOA,虚构收纳产品,US,100,3999,1600,480,1000,500,600,40,80,30
+SKU-B,B0DEMOB,虚构厨房产品,US,60,2399,1500,600,900,350,360,30,60,20
+SKU-C,B0DEMOC,虚构桌面产品,US,40,1599,0,0,500,230,240,25,30,15
