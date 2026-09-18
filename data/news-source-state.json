@@ -1,0 +1,20 @@
+{
+  "amazon-sell-announcements": {
+    "lastSuccessAt": null,
+    "lastFailureAt": "2026-09-18T10:01:51.864Z",
+    "failureCount": 1,
+    "lastError": "fetch failed"
+  },
+  "amazon-small-business-news": {
+    "lastSuccessAt": "2026-09-18T10:01:51.864Z",
+    "lastFailureAt": null,
+    "failureCount": 0,
+    "lastError": null
+  },
+  "amazon-ads-newsroom": {
+    "lastSuccessAt": "2026-09-18T10:01:51.864Z",
+    "lastFailureAt": null,
+    "failureCount": 0,
+    "lastError": null
+  }
+}
