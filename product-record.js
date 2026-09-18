@@ -24,7 +24,7 @@
    * @property {{productCost:number|null,packagingCost:number|null,inspectionCost:number|null,freight:number|null,duty:number|null,fbaFee:number|null,storageCost:number|null,returnRate:number|null,averageReturnLoss:number|null,referralFeeRate:number|null,vatRate:number|null,acos:number|null,cpc:number|null,cvr:number|null}} profitInputs
    * @property {{competitionScore:number|null,demandScore:number|null,vocScore:number|null,riskScore:number|null,opportunityScore:number|null}} analysis
    * @property {{awdAvailable:number,fbaAvailable:number,fbaInbound:number,totalAvailable:number,totalStockIncludingInbound:number,daysOfSupply:number|null,inventoryStatus:string,updatedAt:string}=} inventory
-   * @property {{periodStart:string|null,periodEnd:string|null,unitsSold:number|null,totalSales:number|null,adSales:number|null,organicSales:number|null,adSpend:number|null,acos:number|null,tacos:number|null,breakEvenAcos:number|null,netProfit:number|null,netMargin:number|null,profitLeakAmount:number|null,status:string|null,updatedAt:string|null}=} profitability
+   * @property {{periodStart:string|null,periodEnd:string|null,unitsSold:number|null,totalSales:number|null,adSales:number|null,organicSales:number|null,adSpend:number|null,adOrders:number|null,clicks:number|null,impressions:number|null,unitCost:number|null,unitCostCurrency:string|null,unitCostLocal:number|null,salesComplete:boolean,adsComplete:boolean,feesComplete:boolean,costComplete:boolean,dataCompleteness:string,acos:number|null,tacos:number|null,breakEvenAcos:number|null,netProfit:number|null,netMargin:number|null,profitLeakAmount:number|null,status:string|null,updatedAt:string|null}=} profitability
    */
   const ProductRecordSchema = Object.freeze({
     identity: Object.freeze(['id', 'asin', 'marketplace', 'currency', 'exchangeRate', 'exchangeRateSource', 'exchangeRateDate', 'exchangeRateFetchedAt', 'manualExchangeRate', 'title', 'brand', 'category', 'mainKeyword']),
@@ -33,7 +33,7 @@
     profitInputs: Object.freeze(['productCost', 'packagingCost', 'inspectionCost', 'freight', 'duty', 'fbaFee', 'storageCost', 'returnRate', 'averageReturnLoss', 'referralFeeRate', 'vatRate', 'acos', 'cpc', 'cvr']),
     analysis: Object.freeze(['competitionScore', 'demandScore', 'vocScore', 'riskScore', 'opportunityScore']),
     inventory: Object.freeze(['awdAvailable', 'fbaAvailable', 'fbaInbound', 'totalAvailable', 'totalStockIncludingInbound', 'daysOfSupply', 'inventoryStatus', 'updatedAt']),
-    profitability: Object.freeze(['periodStart', 'periodEnd', 'unitsSold', 'totalSales', 'adSales', 'organicSales', 'adSpend', 'acos', 'tacos', 'breakEvenAcos', 'netProfit', 'netMargin', 'profitLeakAmount', 'status', 'updatedAt'])
+    profitability: Object.freeze(['periodStart', 'periodEnd', 'unitsSold', 'totalSales', 'adSales', 'organicSales', 'adSpend', 'adOrders', 'clicks', 'impressions', 'unitCost', 'unitCostCurrency', 'unitCostLocal', 'salesComplete', 'adsComplete', 'feesComplete', 'costComplete', 'dataCompleteness', 'acos', 'tacos', 'breakEvenAcos', 'netProfit', 'netMargin', 'profitLeakAmount', 'status', 'updatedAt'])
   });
 
   function normalizeProductRecord(record = {}) {

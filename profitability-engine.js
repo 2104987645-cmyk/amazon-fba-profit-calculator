@@ -52,8 +52,9 @@
     const adSpend = input.adSpend;
     const costs = COST_FIELDS.reduce((sum, f) => sum + (input[f] || 0), 0);
     const amazonFees = (input.fbaFees || 0) + (input.referralFees || 0) + (input.storageFees || 0);
-    const canProfit = totalSales != null;
-    const organicSales = totalSales == null || adSales == null ? null : Math.max(0, totalSales - adSales);
+    const strictCompleteness = typeof input.salesComplete === 'boolean';
+    const canProfit = totalSales != null && (!strictCompleteness || (input.salesComplete && input.feesComplete && input.costComplete));
+    const organicSales = totalSales == null || adSales == null || adSales > totalSales ? null : totalSales - adSales;
     const profitBeforeAds = canProfit ? totalSales - costs : null;
     const netProfit = canProfit ? profitBeforeAds - (adSpend || 0) : null;
     const grossProfit = canProfit ? totalSales - (input.productCost || 0) : null;
@@ -85,7 +86,7 @@
     const profitLeakAmount = advertisingLeak + negativeLoss;
     const adsPresent = input.adSales != null || input.adSpend != null;
     const costsComplete = ['productCost', 'fbaFees', 'referralFees', 'returnCost'].every(f => input[f] != null);
-    const dataCompleteness = !adsPresent ? 'sales-only' : totalSales == null ? 'ads-only' : costsComplete ? 'complete' : 'partial';
+    const dataCompleteness = input.dataCompleteness || (!adsPresent ? 'sales-only' : totalSales == null ? 'ads-only' : costsComplete ? 'complete' : 'partial');
     return { ...input, organicSales, operatingCost: costs, amazonFees, grossProfit, contributionProfit: profitBeforeAds, profitBeforeAds, netProfit, grossMargin, netMargin, acos, tacos, breakEvenAdSpend, breakEvenAcos, preAdContributionMarginRate, adRevenueContribution, adProfit, adProfitMargin, organicSalesShare, adSalesShare, profitabilityStatus, advertisingHealth, leaks, advertisingLeak, negativeMarginLoss: negativeLoss, profitLeakAmount, profitLeakPriority: leaks.length ? profitLeakPriority : 'none', dataCompleteness };
   }
 

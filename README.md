@@ -10,7 +10,16 @@
 
 ## 广告与利润分析模块
 
-访问 `#/profitability`。支持字段自动识别与手动映射、重复 SKU 汇总、组合级指标、广告健康度、规则型 Profit Leak、数据完整性、搜索筛选排序分页以及三个经营图表。
+访问 `#/profitability`。支持直接导入 Amazon Seller Central Business Report、Amazon Ads Advertised Product Report、Amazon Payments Transaction / Date Range Report，以及用户维护的 Product Cost CSV。系统自动识别报表、支持手动字段映射，并通过 SKU / ASIN 交叉映射合并数据。
+
+支持的原生数据源：
+
+- Business Reports → Detail Page Sales and Traffic by Child Item
+- Sponsored Products → Advertised Product Report
+- Payments → Transaction Report / Date Range Report
+- Product Cost CSV 或页面映射
+
+同类型新文件默认替换旧文件；重复文件会提示。销售、广告和费用必须使用相同分析周期与 Marketplace。费用以 Payments 实际数据为准，当前阶段不自动估算 Amazon Fee。
 
 经营 CSV 仅在当前浏览器内解析，不上传服务器，也不会将原始数据写入 `localStorage`。所有成本字段默认表示所选分析周期内该 SKU 的总成本；组合 ACoS、TACoS 与净利润率按汇总金额重新计算，不平均 SKU 百分比。
 
