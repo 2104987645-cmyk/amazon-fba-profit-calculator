@@ -21,4 +21,11 @@ assert.strictEqual(news.isStale({ lastVerifiedAt: '2025-01-01' }, '2026-09-18'),
 assert.strictEqual(news.validateNewsItem({ id: 'x' }).valid, false, '缺少字段时不通过校验但不抛错');
 assert.strictEqual(news.getLatestNews(3).length, 3, 'Dashboard 最新动态接口');
 assert.strictEqual(news.getHighPriorityNews(2).every(x => x.importance === 'high'), true, 'Dashboard 高优先级接口');
-console.log('news tests passed: 14');
+assert.deepStrictEqual(news.parseHashFilters('#/news?importance=high'), { importance: 'high' });
+assert.deepStrictEqual(news.parseHashFilters('#/news?marketplace=UK'), { marketplace: 'UK' });
+assert.deepStrictEqual(news.parseHashFilters('#/news?module=profit'), { module: 'profit' });
+assert.deepStrictEqual(news.parseHashFilters('#/news?foo=bar&marketplace=ABC'), {}, '非法参数被忽略');
+assert.strictEqual(news.filterNews(data, { module: 'profit' }).every(x => x.affectedModules.includes('profit')), true, '模块筛选');
+assert.strictEqual(news.getActionLevel({ actionRequired: 'review' }), 'review', '兼容旧行动等级');
+assert.strictEqual(news.getActionLevel({ actionRequired: true, actionLevel: 'required' }), 'required', '支持 V2 行动结构');
+console.log('news tests passed: 21');
