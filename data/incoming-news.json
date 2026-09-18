@@ -1078,5 +1078,65 @@
     "duplicateOf": null,
     "possibleDuplicateOf": null,
     "fingerprint": "a87a1ecc4299b9219cdecfaff487ce183e0adfa8e27ac9397728241105bd8f9d"
+  },
+  {
+    "id": "amazon-sell-announcements-prime-day-tips",
+    "source": {
+      "id": "amazon-sell-announcements",
+      "name": "Amazon Sell 官方公告",
+      "type": "amazon-blog",
+      "url": "https://sell.amazon.com/blog/announcements"
+    },
+    "externalId": "prime-day-tips",
+    "officialUrl": "https://sell.amazon.com/blog/prime-day-tips",
+    "title": "Ready, set, sell! Prepare for Prime Day 2026",
+    "summary": "",
+    "publishedAt": "2026-05-19",
+    "discoveredAt": "2026-09-18T10:08:39.156Z",
+    "lastCheckedAt": "2026-09-18T10:08:39.156Z",
+    "marketplaces": [
+      "Global"
+    ],
+    "category": "general",
+    "importance": null,
+    "affectedModules": [],
+    "actionRequired": false,
+    "actionText": "",
+    "actionType": null,
+    "effectiveAt": null,
+    "reviewStatus": "pending",
+    "duplicateOf": null,
+    "possibleDuplicateOf": null,
+    "fingerprint": "e46cbfafb7bed372266348abe1804cc11bd40d8a9a39c58cd39580a31feccd88"
+  },
+  {
+    "id": "amazon-sell-announcements-amazon-accelerate-on-demand-content",
+    "source": {
+      "id": "amazon-sell-announcements",
+      "name": "Amazon Sell 官方公告",
+      "type": "amazon-blog",
+      "url": "https://sell.amazon.com/blog/announcements"
+    },
+    "externalId": "amazon-accelerate-on-demand-content",
+    "officialUrl": "https://sell.amazon.com/blog/amazon-accelerate-on-demand-content",
+    "title": "Amazon Accelerate 2025 sessions now available on demand",
+    "summary": "",
+    "publishedAt": "2025-09-24",
+    "discoveredAt": "2026-09-18T10:08:39.156Z",
+    "lastCheckedAt": "2026-09-18T10:08:39.156Z",
+    "marketplaces": [
+      "Global"
+    ],
+    "category": "general",
+    "importance": null,
+    "affectedModules": [],
+    "actionRequired": false,
+    "actionText": "",
+    "actionType": null,
+    "effectiveAt": null,
+    "reviewStatus": "pending",
+    "duplicateOf": null,
+    "possibleDuplicateOf": null,
+    "fingerprint": "be46f290f91643382cc16c0743e49d6d0336eef8dcf23b264324c17f68843f07"
   }
 ]
