@@ -15,6 +15,8 @@
 
 页面内容用于卖家运营参考；政策、费用和功能可能持续调整，具体规则以 Amazon 官方原文和 Seller Central 实际通知为准。
 
+Dashboard 首页通过 `NewsModule.getHighPriorityNews(3)` 和 `NewsModule.getLatestNews(5)` 展示精简的运营情报摘要；完整内容仍统一进入 `#/news` 查看。
+
 ## 广告与利润分析模块
 
 访问 `#/profitability`。支持直接导入 Amazon Seller Central Business Report、Amazon Ads Advertised Product Report、Amazon Payments Transaction / Date Range Report，以及用户维护的 Product Cost CSV。系统自动识别报表、支持手动字段映射，并通过 SKU / ASIN 交叉映射合并数据。

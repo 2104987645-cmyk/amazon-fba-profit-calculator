@@ -81,7 +81,8 @@
     return `<section class="dashboard-page route-page">
       <header class="dashboard-intro"><p>AMAZON SELLER WORKBENCH</p><h1>亚马逊选品与运营工作台</h1><span>从市场发现、产品研究、VOC、利润测算到采购决策的一体化工作台。</span></header>
       <section class="dashboard-start"><div><small>开始新的产品研究</small><h2>选择下一步工作</h2></div><div><a class="button secondary" href="#/data/import">导入产品数据</a><a class="button primary" href="#/profit">打开利润模拟器</a></div></section>
-      <section class="module-section"><div class="module-heading"><h2>工作模块</h2><span>当前可用 3 个页面：工作台、利润模拟器与库存分析</span></div><div class="module-grid">${modules.map(item => `<article class="module-card ${item[5] ? 'is-available' : ''}"><div><b>${item[0]}</b><span class="status ${item[5] ? 'available' : 'soon'}">${item[5] ? 'Available' : 'Coming Soon'}</span></div><h3>${item[1]}</h3><small>${item[2]}</small><p>${item[3]}</p><a href="#${item[4]}">${item[5] ? '打开工具' : '查看模块'}</a></article>`).join('')}</div></section>
+      <section class="module-section"><div class="module-heading"><h2>工作模块</h2><span>利润、库存与广告经营分析工具</span></div><div class="module-grid">${modules.map(item => `<article class="module-card ${item[5] ? 'is-available' : ''}"><div><b>${item[0]}</b><span class="status ${item[5] ? 'available' : 'soon'}">${item[5] ? 'Available' : 'Coming Soon'}</span></div><h3>${item[1]}</h3><small>${item[2]}</small><p>${item[3]}</p><a href="#${item[4]}">${item[5] ? '打开工具' : '查看模块'}</a></article>`).join('')}</div></section>
+      <div id="dashboardIntelligence" class="dashboard-intelligence-host"></div>
     </section>`;
   }
 
@@ -111,7 +112,10 @@
     if (window.ProfitabilityModule) window.ProfitabilityModule.unmount();
     if (window.NewsModule) window.NewsModule.unmount();
     view.querySelectorAll('.route-page:not(#profitModule)').forEach(node => node.remove());
-    if (route.type === 'dashboard') view.insertAdjacentHTML('afterbegin', dashboardMarkup());
+    if (route.type === 'dashboard') {
+      view.insertAdjacentHTML('afterbegin', dashboardMarkup());
+      if (window.DashboardIntelligence) window.DashboardIntelligence.mount(view.querySelector('#dashboardIntelligence'), window.NewsModule);
+    }
     else if (route.type === 'inventory') {
       const inventoryHost = document.createElement('div');
       inventoryHost.id = 'inventoryModule';
