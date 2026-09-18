@@ -45,6 +45,11 @@ const mapped = Engine.analyze({ rows: [{ Code: 'X', RevenueX: '99' }], mapping: 
 assert.strictEqual(mapped.ok, true);
 assert.strictEqual(mapped.items[0].totalSales, 99);
 
+const mixedMarkets = Engine.analyze({ rows: [{ sku: 'US-1', marketplace: 'US', sales: '100' }, { sku: 'UK-1', marketplace: 'UK', sales: '80' }] });
+assert.strictEqual(mixedMarkets.mixedMarketplaces, true);
+assert.strictEqual(mixedMarkets.summary, null);
+assert.strictEqual(mixedMarkets.summaryByMarketplace.length, 2);
+
 const xss = Engine.analyze({ rows: [{ sku: 'XSS', title: '<script>alert(1)</script>', sales: '10' }] });
 assert.strictEqual(xss.items[0].productName, '<script>alert(1)</script>');
 
