@@ -164,6 +164,9 @@
     state = Object.assign({ marketplace: 'all', category: 'all', importance: 'all', action: 'all', source: 'all', status: 'all', module: 'all', query: '', sort: 'latest' }, parseHashFilters());
     data.forEach(validateNewsItem);
     const header = el('header', 'news-header'); header.append(el('p', 'news-eyebrow', 'KNOWLEDGE & INTELLIGENCE'), el('h1', '', 'Amazon政策与运营动态'), el('span', 'news-en-title', 'Amazon Policy & Seller Updates'), el('p', 'news-subtitle', '聚合 Amazon 官方卖家政策、费用、履约、账户健康、广告与平台功能更新。'), el('div', 'news-official-note', '✓ 本模块仅收录 Amazon 官方来源，不使用社区或第三方信息。')); host.append(header);
+    if (typeof window !== 'undefined' && window.CandidateNewsModule) {
+      const candidateHost = el('section'); host.append(candidateHost); window.CandidateNewsModule.mount(candidateHost);
+    }
     const stats = el('section', 'news-stats'); statsMarkup().forEach(stat => { const box = el('article'); box.append(el('span', '', stat.label), el('strong', '', String(stat.value))); stats.append(box); }); host.append(stats);
     const filters = el('section', 'news-filters');
     const filterDefs = [

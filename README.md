@@ -1,5 +1,20 @@
 # Amazon Seller Workbench
 
+## Auto News Update V1
+
+`#/news` 现已包含独立的“待审核情报”区域。GitHub Actions 每天按北京时间 08:00、14:00、20:00 检查 Amazon Sell 官方公告、Amazon News Small Business 与 Amazon Ads 新闻中心。抓取结果只写入 `data/incoming-news.json`，不会自动进入正式 `news-data.js`，也不会触发 Dashboard / Action Center。
+
+审核编辑结果保存在当前浏览器的 `localStorage`，状态显示为“已审核，待发布”。审核人员需导出正式 News JSON，人工检查后再合并到 `news-data.js`。静态 GitHub Pages 本身不会伪装成已写回仓库。
+
+本地手动检查：
+
+```powershell
+node scripts/fetch-amazon-news.js
+node tests/auto-news.test.js
+```
+
+自动检查坚持公开页面、透明 User-Agent、逐一请求、15 秒超时和部分失败容错；若全部来源失败，不修改候选池和来源状态。
+
 一个运行在 GitHub Pages 的纯前端 Amazon 卖家经营分析工作台。
 
 ## 当前模块
