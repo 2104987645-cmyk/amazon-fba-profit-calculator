@@ -35,7 +35,7 @@
   }
 
   function flattenBrief(brief) {
-    return [...(brief.actions || []), ...(brief.risks || []), ...(brief.monitor || []), ...(brief.information || [])];
+    return [...(brief.actions || []), ...(brief.risks || []), ...(brief.monitor || [])];
   }
   function buildDecisionDashboardModel(newsModule, dependencies, options) {
     const deps = dependencies || { SellerIntelligence: globalThis.SellerIntelligence, DecisionModel: globalThis.DecisionModel, SellerProfile: globalThis.SellerProfile };
@@ -48,7 +48,8 @@
       const briefOptions = Object.assign({ briefDate: new Date().toISOString().slice(0, 10), timezone: 'UTC' }, options || {});
       const dailyBrief = deps.DecisionModel.buildDailyBrief(intelligence, profile, briefOptions);
       const decisions = flattenBrief(dailyBrief).slice(0, 5);
-      return { available: true, generatedAt: dailyBrief.generatedAt, profileConfigured, summary: { total: decisions.length, actions: (dailyBrief.actions || []).length, risks: (dailyBrief.risks || []).length, monitor: (dailyBrief.monitor || []).length }, decisions, dailyBrief, diagnostics: dailyBrief.diagnostics || {}, emptyState: decisions.length ? null : { message: '今天暂无需要优先处理的 Amazon 变化。', detail: '系统仍会继续检查与你站点相关的政策和运营变化。' } };
+      const summary = decisions.reduce((counts, item) => { if (item.category === 'action') counts.actions += 1; else if (item.category === 'risk') counts.risks += 1; else if (item.category === 'monitor') counts.monitor += 1; return counts; }, { total: decisions.length, actions: 0, risks: 0, monitor: 0 });
+      return { available: true, generatedAt: dailyBrief.generatedAt, profileConfigured, summary, decisions, dailyBrief, diagnostics: dailyBrief.diagnostics || {}, emptyState: decisions.length ? null : { message: '今天暂无需要优先处理的 Amazon 变化。', detail: '系统仍会继续检查与你站点相关的政策和运营变化。' } };
     } catch (_) { return empty; }
   }
 
@@ -66,13 +67,14 @@
 
   function createDecisionCard(item) {
     const card = el('article', `decision-card priority-${item.priority || 'low'}`); const tags = el('div', 'intel-tags');
-    tags.append(badge(String(item.priority || 'low').toUpperCase(), `decision-priority ${item.priority || 'low'}`), badge(categoryLabels[item.category] || item.category || 'general', 'category'));
+    const decisionLabels = { action: '需要行动', risk: '风险关注', monitor: '持续关注' };
+    tags.append(badge(String(item.priority || 'low').toUpperCase(), `decision-priority ${item.priority || 'low'}`), badge(decisionLabels[item.category] || item.category || 'monitor', 'category'), badge(categoryLabels[item.newsCategory] || item.newsCategory || 'general', 'topic'));
     card.append(tags, el('h4', '', item.title || 'Amazon 更新'));
     if (item.whyItMatters) { const why = el('p', 'decision-why'); why.append(el('span', '', '为什么与你有关'), document.createTextNode(item.whyItMatters)); card.append(why); }
-    const marketplaces = item.affectedMarketplace || []; if (marketplaces.length) { const markets = el('div', 'intel-tags decision-markets'); marketplaces.forEach(market => markets.append(badge(market, 'market'))); card.append(markets); }
+    const marketplaces = item.marketplaces || []; if (marketplaces.length) { const markets = el('div', 'intel-tags decision-markets'); marketplaces.forEach(market => markets.append(badge(market, 'market'))); card.append(markets); }
     if (item.recommendedAction) { const action = el('p', 'decision-action'); action.append(el('span', '', '建议动作'), el('strong', '', item.recommendedAction)); card.append(action); }
     const meta = []; if (item.urgency && item.urgency !== 'none' && item.urgency !== 'unknown') meta.push(item.urgency); if (item.daysRemaining !== null && item.daysRemaining !== undefined) meta.push(item.daysRemaining < 0 ? '已逾期' : `${item.daysRemaining} 天`); if (meta.length) card.append(el('p', 'decision-meta', meta.join(' · ')));
-    const sourceCount = item.mergeCount || (item.sourceNewsIds || []).length; if (sourceCount) card.append(el('p', 'decision-sources', `来自 ${sourceCount} 条 Amazon 官方更新`));
+    const sourceCount = item.sourceCount || (item.sourceNewsIds || []).length; if (sourceCount) card.append(el('p', 'decision-sources', `来自 ${sourceCount} 条 Amazon 官方更新`));
     const source = el('a', 'decision-source-link', item.recommendedAction ? '查看官方来源' : '查看政策详情'); source.href = item.sourceUrls && item.sourceUrls[0] || '#/news'; card.append(source);
     return card;
   }
