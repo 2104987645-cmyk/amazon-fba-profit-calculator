@@ -18,6 +18,7 @@
   function sellerReason(relevance) {
     const codes = relevance && (relevance.reasonCodes || relevance.reasons) || [];
     if (codes.includes('PROFILE_NOT_CONFIGURED_COMPATIBILITY')) return '当前尚未配置卖家站点，本条更新按兼容模式展示；完善站点信息后可获得更准确的相关性判断。';
+    if (codes.includes('GLOBAL_NEWS')) return '这是 Amazon 全局更新，与你当前经营的站点相关。';
     const marketplaces = relevance && relevance.matchedMarketplaces || [];
     if (marketplaces.length) return `该更新适用于你的 ${marketplaces.join('、')} 站点，可能影响当前经营安排。`;
     return '该更新与当前卖家经营范围相关，建议结合业务情况关注。';
