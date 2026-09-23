@@ -1,0 +1,23 @@
+'use strict';
+const assert = require('node:assert/strict');
+const Dashboard = require('../dashboard-intelligence');
+let passed = 0;
+function test(name, fn) { fn(); passed += 1; console.log(`PASS ${name}`); }
+function item(id, section, overrides) { return Object.assign({ id, priority:'medium', category:'fba', title:id, whyItMatters:'Relevant', affectedMarketplace:['US'], recommendedAction:null, urgency:'soon', daysRemaining:5, sourceNewsIds:[id], sourceUrls:[`https://example.test/${id}`], mergeCount:1, section }, overrides || {}); }
+function deps(brief, profile) { return { SellerIntelligence:{ evaluateAll(news) { return news.map(id => ({ news:{ id } })); } }, DecisionModel:{ buildDailyBrief() { return brief; } }, SellerProfile:{ getProfile() { return profile || { configured:true, marketplaces:['US'] }; } } }; }
+function baseBrief(parts) { return Object.assign({ generatedAt:'2026-09-20T00:00:00.000Z', actions:[], risks:[], monitor:[], information:[], opportunities:[], diagnostics:{ hiddenReasonCounts:{ UNKNOWN_RELEVANCE:2 } } }, parts || {}); }
+const news = { getLatestNews() { return ['a','b','c','d','e','f']; } };
+
+test('0 decision returns the specified empty state', () => { const model=Dashboard.buildDecisionDashboardModel(news,deps(baseBrief())); assert.equal(model.emptyState.message,'今天暂无需要优先处理的 Amazon 变化。'); assert.equal(model.summary.total,0); });
+test('one action preserves action and summary', () => { const action=item('a','actions',{priority:'critical',recommendedAction:'Review shipment'}); const model=Dashboard.buildDecisionDashboardModel(news,deps(baseBrief({actions:[action]}))); assert.equal(model.summary.actions,1); assert.equal(model.decisions[0].recommendedAction,'Review shipment'); });
+test('action risk monitor summary is exact', () => { const model=Dashboard.buildDecisionDashboardModel(news,deps(baseBrief({actions:[item('a','actions')],risks:[item('r','risks')],monitor:[item('m','monitor')]}))); assert.deepEqual(model.summary,{total:3,actions:1,risks:1,monitor:1}); });
+test('never expands beyond five decisions', () => { const items=['a','b','c','d','e','f'].map(id=>item(id,'information')); const model=Dashboard.buildDecisionDashboardModel(news,deps(baseBrief({information:items}))); assert.equal(model.decisions.length,5); });
+test('preserves priority category action marketplaces and days', () => { const value=item('a','actions',{priority:'high',category:'compliance',recommendedAction:'Do it',affectedMarketplace:['US','CA'],daysRemaining:3}); const out=Dashboard.buildDecisionDashboardModel(news,deps(baseBrief({actions:[value]}))).decisions[0]; assert.equal(out.priority,'high'); assert.equal(out.category,'compliance'); assert.equal(out.recommendedAction,'Do it'); assert.deepEqual(out.affectedMarketplace,['US','CA']); assert.equal(out.daysRemaining,3); });
+test('does not invent a null recommended action', () => { const value=item('a','risks'); const out=Dashboard.buildDecisionDashboardModel(news,deps(baseBrief({risks:[value]}))).decisions[0]; assert.equal(out.recommendedAction,null); });
+test('profile warning state is exposed', () => { const model=Dashboard.buildDecisionDashboardModel(news,deps(baseBrief(),{configured:false,marketplaces:[]})); assert.equal(model.profileConfigured,false); });
+test('retains diagnostics without exposing them as decisions', () => { const model=Dashboard.buildDecisionDashboardModel(news,deps(baseBrief())); assert.equal(model.diagnostics.hiddenReasonCounts.UNKNOWN_RELEVANCE,2); assert.equal(model.decisions.length,0); });
+test('does not display opportunities', () => { const model=Dashboard.buildDecisionDashboardModel(news,deps(baseBrief({opportunities:[item('o','opportunities')]}))); assert.equal(model.decisions.length,0); });
+test('maintains DailyBrief order and input immutability', () => { const brief=baseBrief({actions:[item('a','actions')],risks:[item('r','risks')]}); const before=JSON.stringify(brief); const model=Dashboard.buildDecisionDashboardModel(news,deps(brief)); assert.deepEqual(model.decisions.map(x=>x.id),['a','r']); assert.equal(JSON.stringify(brief),before); });
+test('gracefully falls back when dependencies are unavailable', () => { const model=Dashboard.buildDecisionDashboardModel(news,{}); assert.equal(model.available,false); assert.equal(model.decisions.length,0); });
+test('is deterministic for identical inputs', () => { const brief=baseBrief({information:[item('a','information')]}); assert.deepEqual(Dashboard.buildDecisionDashboardModel(news,deps(brief)),Dashboard.buildDecisionDashboardModel(news,deps(brief))); });
+console.log(`dashboard decision experience tests passed: ${passed}`);
