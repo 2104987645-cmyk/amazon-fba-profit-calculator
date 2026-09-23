@@ -16,7 +16,9 @@
     'review-ads': { label: '检查广告', href: '#/profitability' },
     'read-news': { label: '查看政策详情', href: '#/news' }
   };
-  let mountedHost = null; let mountedNews = null; let mountedState = null; let showCompleted = false;
+  let mountedHost = null; let mountedNews = null; let mountedState = null; let showCompleted = false; let profileEditing = false; let profileError = null;
+  const marketplaceLabels = Object.freeze({ US:'美国', CA:'加拿大', MX:'墨西哥', UK:'英国', DE:'德国', FR:'法国', IT:'意大利', ES:'西班牙', NL:'荷兰', SE:'瑞典', PL:'波兰', BE:'比利时', AU:'澳大利亚', JP:'日本' });
+  const marketplaceGroups = Object.freeze({ US:'north-america', CA:'north-america', MX:'north-america', UK:'europe', DE:'europe', FR:'europe', IT:'europe', ES:'europe', NL:'europe', SE:'europe', PL:'europe', BE:'europe', AU:'asia-pacific', JP:'asia-pacific' });
 
   function isActionRequired(item) { return item && item.actionRequired === true; }
   function getActionLevel(item, newsModule) { return newsModule && typeof newsModule.getActionLevel === 'function' ? newsModule.getActionLevel(item) : (item.actionLevel || (typeof item.actionRequired === 'string' ? item.actionRequired : 'info')); }
@@ -36,6 +38,26 @@
 
   function flattenBrief(brief) {
     return [...(brief.actions || []), ...(brief.risks || []), ...(brief.monitor || [])];
+  }
+  function sellerProfileDependency(dependencies) { return dependencies && dependencies.SellerProfile || globalThis.SellerProfile; }
+  function buildSellerProfileViewModel(dependencies, editing, error) {
+    const SellerProfile = sellerProfileDependency(dependencies);
+    if (!SellerProfile || typeof SellerProfile.getProfile !== 'function' || !Array.isArray(SellerProfile.MARKETPLACES)) return { available:false, configured:false, marketplaces:[], marketplaceOptions:[], editing:Boolean(editing), error:error || '站点配置暂时无法保存，请稍后重试。' };
+    const profile = SellerProfile.getProfile(); const marketplaces = Array.isArray(profile.marketplaces) ? profile.marketplaces.slice() : [];
+    return { available:!profile.unavailable, configured:Boolean(profile.configured), marketplaces, marketplaceOptions:SellerProfile.MARKETPLACES.map(code => ({ code, label:marketplaceLabels[code] || code, group:marketplaceGroups[code] || 'other', selected:marketplaces.includes(code) })), editing:Boolean(editing), error:error || (profile.unavailable ? '站点配置暂时无法保存，请稍后重试。' : null) };
+  }
+  function saveSellerProfileSelection(marketplaces, dependencies) {
+    const SellerProfile = sellerProfileDependency(dependencies);
+    if (!Array.isArray(marketplaces) || !marketplaces.length) return { ok:false, error:'请至少选择一个 Amazon 站点。' };
+    if (!SellerProfile || typeof SellerProfile.saveProfile !== 'function') return { ok:false, error:'站点配置暂时无法保存，请稍后重试。' };
+    const result = SellerProfile.saveProfile({ marketplaces });
+    return { ok:Boolean(result && result.configured && !result.unavailable && result.status !== 'unavailable'), result, error:result && result.unavailable ? '站点配置暂时无法保存，请稍后重试。' : null };
+  }
+  function clearSellerProfile(dependencies) {
+    const SellerProfile = sellerProfileDependency(dependencies);
+    if (!SellerProfile || typeof SellerProfile.clearProfile !== 'function') return { ok:false, error:'站点配置暂时无法保存，请稍后重试。' };
+    const result = SellerProfile.clearProfile();
+    return { ok:Boolean(result && !result.unavailable), result, error:result && result.unavailable ? '站点配置暂时无法保存，请稍后重试。' : null };
   }
   function buildDecisionDashboardModel(newsModule, dependencies, options) {
     const deps = dependencies || { SellerIntelligence: globalThis.SellerIntelligence, DecisionModel: globalThis.DecisionModel, SellerProfile: globalThis.SellerProfile };
@@ -88,10 +110,23 @@
     const section = el('section', 'intelligence-link'); section.append(el('h3', '', 'Amazon 政策与运营动态'), el('p', '', '完整查看 Amazon 官方政策、费用、FBA、Listing、账户健康及平台更新。'));
     const link = el('a', 'decision-source-link', '查看完整政策动态'); link.href = '#/news'; section.append(link); return section;
   }
+  function createSellerProfilePanel(model) {
+    const panel = el('section', 'seller-profile-panel'); const heading = el('header', 'seller-profile-heading'); heading.append(el('h3', '', '我的 Amazon 站点')); panel.append(heading);
+    if (!model.available) { panel.append(el('p', 'seller-profile-error', model.error)); return panel; }
+    if (!model.configured && !model.editing) {
+      panel.append(el('p', '', '尚未配置经营站点。配置后，系统会优先展示与你实际站点相关的 Amazon 政策和运营变化。'));
+      const configure = el('button', 'seller-profile-button', '配置站点'); configure.type = 'button'; configure.addEventListener('click', () => { profileEditing = true; profileError = null; render(); }); panel.append(configure, el('small', 'seller-profile-note', '配置仅保存在当前浏览器，不连接 Amazon 账户。')); return panel;
+    }
+    if (model.editing) {
+      const form = el('form', 'seller-profile-form'); const groupLabels = { 'north-america':'北美', europe:'欧洲', 'asia-pacific':'亚太' };
+      ['north-america','europe','asia-pacific'].forEach(group => { const fieldset = el('fieldset', 'seller-profile-group'); fieldset.append(el('legend', '', groupLabels[group])); model.marketplaceOptions.filter(option => option.group === group).forEach(option => { const label = el('label', 'seller-profile-option'); const input = document.createElement('input'); input.type = 'checkbox'; input.name = 'marketplace'; input.value = option.code; input.checked = option.selected; label.append(input, document.createTextNode(` ${option.code} ${option.label}`)); fieldset.append(label); }); form.append(fieldset); });
+      if (model.error) form.append(el('p', 'seller-profile-error', model.error)); const controls = el('div', 'seller-profile-controls'); const save = el('button', 'seller-profile-button', '保存站点'); save.type = 'submit'; const cancel = el('button', 'seller-profile-button secondary', '取消'); cancel.type = 'button'; cancel.addEventListener('click', () => { profileEditing = false; profileError = null; render(); }); controls.append(save, cancel); form.append(controls); form.addEventListener('submit', event => { event.preventDefault(); const selected = [...form.querySelectorAll('input[name="marketplace"]:checked')].map(input => input.value); const saved = saveSellerProfileSelection(selected); if (saved.ok) { profileEditing = false; profileError = null; } else profileError = saved.error; render(); }); panel.append(form); return panel;
+    }
+    const badges = el('div', 'seller-profile-badges'); model.marketplaces.forEach(code => badges.append(badge(code, 'market'))); const edit = el('button', 'seller-profile-button', '编辑站点'); edit.type = 'button'; edit.addEventListener('click', () => { profileEditing = true; profileError = null; render(); }); const clear = el('button', 'seller-profile-button secondary', '清除站点配置'); clear.type = 'button'; clear.addEventListener('click', () => { const cleared = clearSellerProfile(); if (cleared.ok) { profileEditing = false; profileError = null; } else profileError = cleared.error; render(); }); panel.append(badges, edit, clear); return panel;
+  }
   function createDecisionExperience(model) {
     const section = el('section', 'decision-experience'); const heading = el('header', 'decision-heading'); const copy = el('div'); copy.append(el('p', '', "TODAY'S DECISIONS"), el('h2', '', '今日经营决策'), el('span', '', '根据你的站点和 Amazon 最新变化整理')); heading.append(copy); section.append(heading);
     if (!model.available) { section.append(createEmpty('今日经营决策暂不可用'), createIntelligenceLink()); return section; }
-    if (!model.profileConfigured) section.append(el('p', 'decision-profile-note', '完善卖家站点信息后，可以获得更相关的经营决策。'));
     if (model.emptyState) { section.append(createEmpty(model.emptyState.message, model.emptyState.detail), createIntelligenceLink()); return section; }
     const summary = el('div', 'decision-summary'); [['需要处理', model.summary.actions], ['风险', model.summary.risks], ['关注', model.summary.monitor]].forEach(value => { const box = el('div'); box.append(el('strong', '', String(value[1])), el('span', '', value[0])); summary.append(box); }); section.append(summary);
     const list = el('div', 'decision-list'); model.decisions.forEach(item => list.append(createDecisionCard(item, mountedState, !model.profileConfigured))); section.append(list, createIntelligenceLink()); return section;
@@ -141,10 +176,10 @@
     const top = el('div', 'intelligence-heading'); const title = el('div');
     title.append(el('p', '', 'SELLER INTELLIGENCE'), el('h2', '', '运营情报'), el('span', '', '及时了解可能影响 Amazon 经营的官方政策与平台更新。'));
     top.append(title, el('span', 'knowledge-soon', '运营知识库 · 即将推出')); section.append(top);
-    section.append(createDecisionExperience(buildDecisionDashboardModel(mountedNews)));
+    section.append(createSellerProfilePanel(buildSellerProfileViewModel(undefined, profileEditing, profileError)), createDecisionExperience(buildDecisionDashboardModel(mountedNews)));
     section.append(el('p', 'intelligence-note', '内容仅来自 Amazon 官方来源。完整信息以 Amazon 官方原文和 Seller Central 实际通知为准。')); mountedHost.append(section);
   }
 
-  function mount(host, newsModule, actionState) { mountedHost = host; mountedNews = newsModule; mountedState = actionState; showCompleted = false; render(); }
-  return { mount, getModel, buildDecisionDashboardModel, canCompleteDecision, completeDecision, effectiveLabel, truncate, actionConfig, isActionRequired, newsHref };
+  function mount(host, newsModule, actionState) { mountedHost = host; mountedNews = newsModule; mountedState = actionState; showCompleted = false; profileEditing = false; profileError = null; render(); }
+  return { mount, getModel, buildDecisionDashboardModel, buildSellerProfileViewModel, saveSellerProfileSelection, clearSellerProfile, canCompleteDecision, completeDecision, effectiveLabel, truncate, actionConfig, isActionRequired, newsHref };
 });

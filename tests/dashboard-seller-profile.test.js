@@ -1,0 +1,24 @@
+'use strict';
+const assert = require('node:assert/strict');
+const Dashboard = require('../dashboard-intelligence');
+const SellerProfile = require('../seller-profile');
+const NewsRelevance = require('../news-relevance');
+let passed = 0;
+function test(name, fn) { fn(); passed += 1; console.log(`PASS ${name}`); }
+function storage() { const values={}; return { getItem:key => values[key] ?? null, setItem:(key,value) => { values[key]=value; }, removeItem:key => { delete values[key]; }, values }; }
+function profileDeps(api) { return { SellerProfile:api }; }
+
+test('unconfigured profile view is safe', () => { const api=SellerProfile.create(storage()); const model=Dashboard.buildSellerProfileViewModel(profileDeps(api)); assert.equal(model.configured,false); assert.deepEqual(model.marketplaces,[]); });
+test('marketplace options come exactly from SellerProfile core', () => { const api=SellerProfile.create(storage()); const model=Dashboard.buildSellerProfileViewModel(profileDeps(api)); assert.deepEqual(model.marketplaceOptions.map(option=>option.code),api.MARKETPLACES); assert.equal(model.marketplaceOptions.length,14); assert.equal(model.marketplaceOptions.some(option=>option.code==='GLOBAL'||option.code==='EU'),false); });
+test('save delegates a single US marketplace to SellerProfile', () => { const api=SellerProfile.create(storage()); const result=Dashboard.saveSellerProfileSelection(['US'],profileDeps(api)); assert.equal(result.ok,true); assert.deepEqual(api.getProfile().marketplaces,['US']); });
+test('save delegates multiple marketplaces without UI normalization', () => { const calls=[]; const api={saveProfile(value){calls.push(value); return {configured:true,unavailable:false,status:'configured',marketplaces:['US','UK']};}}; const result=Dashboard.saveSellerProfileSelection(['US','US','UK'],profileDeps(api)); assert.equal(result.ok,true); assert.deepEqual(calls,[{marketplaces:['US','US','UK']}]); });
+test('empty selection does not call normal save', () => { let calls=0; const api={saveProfile(){calls+=1;}}; const result=Dashboard.saveSellerProfileSelection([],profileDeps(api)); assert.equal(result.ok,false); assert.equal(calls,0); });
+test('clear delegates to SellerProfile.clearProfile', () => { let calls=0; const api={clearProfile(){calls+=1;return {unavailable:false,configured:false,status:'valid'};}}; assert.equal(Dashboard.clearSellerProfile(profileDeps(api)).ok,true); assert.equal(calls,1); });
+test('storage unavailable returns graceful state', () => { const api=SellerProfile.create(null); const model=Dashboard.buildSellerProfileViewModel(profileDeps(api)); assert.equal(model.available,false); assert.match(model.error,/暂时无法保存/); });
+test('saved marketplaces are reflected as selected after a view rebuild', () => { const api=SellerProfile.create(storage()); Dashboard.saveSellerProfileSelection(['US','UK'],profileDeps(api)); const model=Dashboard.buildSellerProfileViewModel(profileDeps(api)); assert.equal(model.configured,true); assert.deepEqual(model.marketplaces,['US','UK']); assert.deepEqual(model.marketplaceOptions.filter(option=>option.selected).map(option=>option.code),['US','UK']); });
+test('US relevance relies on NewsRelevance for US global and nonmatching sites', () => { const profile={marketplaces:['US']}; assert.equal(NewsRelevance.evaluate(profile,{marketplaces:['US']}).status,'relevant'); assert.equal(NewsRelevance.evaluate(profile,{marketplaces:['GLOBAL']}).status,'relevant'); assert.equal(NewsRelevance.evaluate(profile,{marketplaces:['CA']}).status,'irrelevant'); assert.equal(NewsRelevance.evaluate(profile,{marketplaces:['UK']}).status,'irrelevant'); });
+test('US plus CA relevance relies on NewsRelevance', () => { const profile={marketplaces:['US','CA']}; for (const code of ['US','CA','GLOBAL']) assert.equal(NewsRelevance.evaluate(profile,{marketplaces:[code]}).status,'relevant'); });
+test('UK and DE regional boundaries are owned by NewsRelevance', () => { assert.equal(NewsRelevance.evaluate({marketplaces:['UK']},{marketplaces:['EU']}).status,'irrelevant'); assert.equal(NewsRelevance.evaluate({marketplaces:['DE']},{marketplaces:['EU']}).status,'relevant'); });
+test('unconfigured compatibility mode remains available to the Dashboard chain', () => { const api=SellerProfile.create(storage()); const model=Dashboard.buildSellerProfileViewModel(profileDeps(api)); assert.equal(model.configured,false); assert.equal(model.marketplaceOptions.length,14); });
+test('profile helper output is deterministic and does not mutate core result', () => { const api=SellerProfile.create(storage()); Dashboard.saveSellerProfileSelection(['US'],profileDeps(api)); const first=Dashboard.buildSellerProfileViewModel(profileDeps(api)); const second=Dashboard.buildSellerProfileViewModel(profileDeps(api)); assert.deepEqual(first,second); first.marketplaces.push('CA'); assert.deepEqual(api.getProfile().marketplaces,['US']); });
+console.log(`dashboard seller profile tests passed: ${passed}`);
