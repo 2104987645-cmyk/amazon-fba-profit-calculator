@@ -64,27 +64,37 @@
   function createEmpty(message, english) { const node = el('div', 'intel-empty', message); if (english) node.append(el('small', '', english)); return node; }
   function newsHref(params) { const query = new URLSearchParams(params).toString(); return '#/news' + (query ? '?' + query : ''); }
   function actionConfig(type) { return actionRoutes[type] || { label: '查看详情', href: '#/news' }; }
+  function canCompleteDecision(item) { return Boolean(item && item.category === 'action' && Array.isArray(item.sourceNewsIds) && item.sourceNewsIds.length === 1); }
+  function completeDecision(item, actionState) {
+    if (!canCompleteDecision(item) || !actionState || typeof actionState.complete !== 'function') return false;
+    return actionState.complete(item.sourceNewsIds[0]) === true;
+  }
 
-  function createDecisionCard(item) {
+  function createDecisionCard(item, actionState, suppressProfileCompatibility) {
     const card = el('article', `decision-card priority-${item.priority || 'low'}`); const tags = el('div', 'intel-tags');
     const decisionLabels = { action: '需要行动', risk: '风险关注', monitor: '持续关注' };
     tags.append(badge(String(item.priority || 'low').toUpperCase(), `decision-priority ${item.priority || 'low'}`), badge(decisionLabels[item.category] || item.category || 'monitor', 'category'), badge(categoryLabels[item.newsCategory] || item.newsCategory || 'general', 'topic'));
     card.append(tags, el('h4', '', item.title || 'Amazon 更新'));
-    if (item.whyItMatters) { const why = el('p', 'decision-why'); why.append(el('span', '', '为什么与你有关'), document.createTextNode(item.whyItMatters)); card.append(why); }
+    if (item.whyItMatters && !(suppressProfileCompatibility && item.whyItMatters.includes('尚未配置卖家站点'))) { const why = el('p', 'decision-why'); why.append(el('span', '', '为什么与你有关'), document.createTextNode(item.whyItMatters)); card.append(why); }
     const marketplaces = item.marketplaces || []; if (marketplaces.length) { const markets = el('div', 'intel-tags decision-markets'); marketplaces.forEach(market => markets.append(badge(market, 'market'))); card.append(markets); }
     if (item.recommendedAction) { const action = el('p', 'decision-action'); action.append(el('span', '', '建议动作'), el('strong', '', item.recommendedAction)); card.append(action); }
     const meta = []; if (item.urgency && item.urgency !== 'none' && item.urgency !== 'unknown') meta.push(item.urgency); if (item.daysRemaining !== null && item.daysRemaining !== undefined) meta.push(item.daysRemaining < 0 ? '已逾期' : `${item.daysRemaining} 天`); if (meta.length) card.append(el('p', 'decision-meta', meta.join(' · ')));
     const sourceCount = item.sourceCount || (item.sourceNewsIds || []).length; if (sourceCount) card.append(el('p', 'decision-sources', `来自 ${sourceCount} 条 Amazon 官方更新`));
     const source = el('a', 'decision-source-link', item.recommendedAction ? '查看官方来源' : '查看政策详情'); source.href = item.sourceUrls && item.sourceUrls[0] || '#/news'; card.append(source);
+    if (canCompleteDecision(item)) { const complete = el('button', 'decision-complete-button', '标记已处理'); complete.type = 'button'; complete.addEventListener('click', () => { if (completeDecision(item, actionState)) render(); }); card.append(complete); }
     return card;
+  }
+  function createIntelligenceLink() {
+    const section = el('section', 'intelligence-link'); section.append(el('h3', '', 'Amazon 政策与运营动态'), el('p', '', '完整查看 Amazon 官方政策、费用、FBA、Listing、账户健康及平台更新。'));
+    const link = el('a', 'decision-source-link', '查看完整政策动态'); link.href = '#/news'; section.append(link); return section;
   }
   function createDecisionExperience(model) {
     const section = el('section', 'decision-experience'); const heading = el('header', 'decision-heading'); const copy = el('div'); copy.append(el('p', '', "TODAY'S DECISIONS"), el('h2', '', '今日经营决策'), el('span', '', '根据你的站点和 Amazon 最新变化整理')); heading.append(copy); section.append(heading);
-    if (!model.available) { section.append(createEmpty('今日经营决策暂不可用')); return section; }
+    if (!model.available) { section.append(createEmpty('今日经营决策暂不可用'), createIntelligenceLink()); return section; }
     if (!model.profileConfigured) section.append(el('p', 'decision-profile-note', '完善卖家站点信息后，可以获得更相关的经营决策。'));
-    if (model.emptyState) { section.append(createEmpty(model.emptyState.message, model.emptyState.detail)); return section; }
+    if (model.emptyState) { section.append(createEmpty(model.emptyState.message, model.emptyState.detail), createIntelligenceLink()); return section; }
     const summary = el('div', 'decision-summary'); [['需要处理', model.summary.actions], ['风险', model.summary.risks], ['关注', model.summary.monitor]].forEach(value => { const box = el('div'); box.append(el('strong', '', String(value[1])), el('span', '', value[0])); summary.append(box); }); section.append(summary);
-    const list = el('div', 'decision-list'); model.decisions.forEach(item => list.append(createDecisionCard(item))); section.append(list); return section;
+    const list = el('div', 'decision-list'); model.decisions.forEach(item => list.append(createDecisionCard(item, mountedState, !model.profileConfigured))); section.append(list, createIntelligenceLink()); return section;
   }
 
   function createHeader(title, english, href) {
@@ -128,29 +138,13 @@
 
   function render() {
     if (!mountedHost) return; mountedHost.replaceChildren(); const section = el('section', 'intelligence-section');
-    const model = getModel(mountedNews, mountedState, 5); const top = el('div', 'intelligence-heading'); const title = el('div');
+    const top = el('div', 'intelligence-heading'); const title = el('div');
     title.append(el('p', '', 'SELLER INTELLIGENCE'), el('h2', '', '运营情报'), el('span', '', '及时了解可能影响 Amazon 经营的官方政策与平台更新。'));
     top.append(title, el('span', 'knowledge-soon', '运营知识库 · 即将推出')); section.append(top);
     section.append(createDecisionExperience(buildDecisionDashboardModel(mountedNews)));
-    if (!model.available) section.append(createEmpty('Amazon官方动态暂不可用'));
-    else {
-      const summary = el('section', 'intelligence-summary');
-      [['待处理行动', model.pending.length], ['高优先级', model.highPriority.length], ['最新动态', model.latest.length]].forEach(value => { const box = el('div'); box.append(el('strong', '', String(value[1])), el('span', '', value[0])); summary.append(box); }); section.append(summary);
-      const actionSection = el('section', 'action-center'); const actionHeader = el('header', 'action-center-header'); const actionTitle = el('div'); actionTitle.append(el('h3', '', '运营行动中心'), el('small', '', 'Action Center · 需要你处理的运营事项'));
-      const controls = el('div', 'action-center-controls'); controls.append(badge(`${model.pending.length} 项待处理`, 'pending-count'));
-      const toggle = el('button', 'completed-toggle', showCompleted ? '返回待处理' : `查看已处理（${model.completed.length}）`); toggle.type = 'button'; toggle.addEventListener('click', () => { showCompleted = !showCompleted; render(); }); controls.append(toggle); actionHeader.append(actionTitle, controls); actionSection.append(actionHeader);
-      const actionList = el('div', 'action-list'); const visibleActions = showCompleted ? model.completed : model.pending;
-      if (visibleActions.length) visibleActions.forEach(item => actionList.append(createActionCard(item, mountedNews, mountedState, showCompleted)));
-      else actionList.append(createEmpty(showCompleted ? '暂无已处理运营事项' : '暂无待处理运营事项', showCompleted ? '' : 'No pending actions'));
-      actionSection.append(actionList); section.append(actionSection);
-      const grid = el('div', 'intelligence-grid'); const high = el('section', 'intel-column intel-high'); high.append(createHeader('高优先级运营提醒', 'High Priority Updates', newsHref({ importance: 'high' })));
-      const highList = el('div', 'intel-list'); model.highPriority.length ? model.highPriority.forEach(item => highList.append(createHighCard(item, mountedNews))) : highList.append(createEmpty('暂无高优先级运营提醒')); high.append(highList);
-      const latest = el('section', 'intel-column intel-latest'); latest.append(createHeader('最新 Amazon 官方动态', 'Latest Official Updates', '#/news'));
-      const latestList = el('div', 'intel-list'); model.latest.length ? model.latest.forEach(item => latestList.append(createLatestRow(item))) : latestList.append(createEmpty('暂无最新官方动态')); latest.append(latestList); grid.append(high, latest); section.append(grid);
-    }
     section.append(el('p', 'intelligence-note', '内容仅来自 Amazon 官方来源。完整信息以 Amazon 官方原文和 Seller Central 实际通知为准。')); mountedHost.append(section);
   }
 
   function mount(host, newsModule, actionState) { mountedHost = host; mountedNews = newsModule; mountedState = actionState; showCompleted = false; render(); }
-  return { mount, getModel, buildDecisionDashboardModel, effectiveLabel, truncate, actionConfig, isActionRequired, newsHref };
+  return { mount, getModel, buildDecisionDashboardModel, canCompleteDecision, completeDecision, effectiveLabel, truncate, actionConfig, isActionRequired, newsHref };
 });
