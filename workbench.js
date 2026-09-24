@@ -12,6 +12,7 @@
     '/profit': { type: 'profit', title: 'FBA真实利润模拟器', topbar: '利润与风险', context: 'FBA Profit Simulator' },
     '/profitability': { type: 'profitability', title: '广告与利润分析', topbar: '广告与利润', context: 'Advertising & Profitability' },
     '/inventory': { type: 'inventory', title: '库存与补货分析', topbar: '库存与补货', context: 'Inventory & Restock' },
+    '/knowledge': { type: 'knowledge', title: 'Amazon运营知识库', topbar: 'Amazon运营知识库', context: 'Knowledge Query' },
     '/news': { type: 'news', title: 'Amazon政策与运营动态', topbar: '政策与运营动态', context: 'Amazon Policy & Seller Updates' },
     '/decision': { title: '决策中心', description: '未来汇总市场、竞争、VOC、利润和风险信息，形成统一选品决策。' },
     '/data/import': { title: '数据导入', description: '未来用于导入产品、市场和经营数据，并映射到统一 ProductRecord。' }
@@ -111,6 +112,7 @@
     if (window.InventoryModule) window.InventoryModule.unmount();
     if (window.ProfitabilityModule) window.ProfitabilityModule.unmount();
     if (window.NewsModule) window.NewsModule.unmount();
+    if (window.KnowledgePage) window.KnowledgePage.unmount();
     view.querySelectorAll('.route-page:not(#profitModule)').forEach(node => node.remove());
     if (route.type === 'dashboard') {
       view.insertAdjacentHTML('afterbegin', dashboardMarkup());
@@ -136,6 +138,13 @@
       newsHost.className = 'route-page';
       view.prepend(newsHost);
       window.NewsModule.mount(newsHost);
+    }
+    else if (route.type === 'knowledge') {
+      const knowledgeHost = document.createElement('div');
+      knowledgeHost.id = 'knowledgeModule';
+      knowledgeHost.className = 'route-page';
+      view.prepend(knowledgeHost);
+      window.KnowledgePage.mount(knowledgeHost, window.KnowledgeQueryRuntime || {});
     }
     else if (route.type !== 'profit') view.insertAdjacentHTML('afterbegin', placeholderMarkup(route));
     closeMenu();
