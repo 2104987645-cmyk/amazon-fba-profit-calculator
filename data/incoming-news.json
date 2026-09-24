@@ -1138,5 +1138,35 @@
     "duplicateOf": null,
     "possibleDuplicateOf": null,
     "fingerprint": "be46f290f91643382cc16c0743e49d6d0336eef8dcf23b264324c17f68843f07"
+  },
+  {
+    "id": "amazon-small-business-news-amazon-seller-central-multichannel-selling-tools",
+    "source": {
+      "id": "amazon-small-business-news",
+      "name": "Amazon News · Small Business",
+      "type": "news-amazon",
+      "url": "https://www.aboutamazon.com/news/small-business"
+    },
+    "externalId": "amazon-seller-central-multichannel-selling-tools",
+    "officialUrl": "https://www.aboutamazon.com/news/small-business/amazon-seller-central-multichannel-selling-tools",
+    "title": "Sellers can now manage sales across Amazon, eBay, Shopify, TikTok, and Walmart from Seller Central",
+    "summary": "",
+    "publishedAt": null,
+    "discoveredAt": "2026-09-24T16:27:30.323Z",
+    "lastCheckedAt": "2026-09-24T16:27:30.323Z",
+    "marketplaces": [
+      "Global"
+    ],
+    "category": "general",
+    "importance": null,
+    "affectedModules": [],
+    "actionRequired": false,
+    "actionText": "",
+    "actionType": null,
+    "effectiveAt": null,
+    "reviewStatus": "pending",
+    "duplicateOf": null,
+    "possibleDuplicateOf": null,
+    "fingerprint": "4945f424e4b41dff060eaeb7aa6ec44dbcc6092ee88715527cb0f57522373fdd"
   }
 ]

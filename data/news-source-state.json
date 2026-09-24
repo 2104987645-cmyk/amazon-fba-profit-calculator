@@ -1,18 +1,18 @@
 {
   "amazon-sell-announcements": {
-    "lastSuccessAt": "2026-09-18T10:08:39.156Z",
+    "lastSuccessAt": "2026-09-24T16:27:30.323Z",
     "lastFailureAt": "2026-09-18T10:01:51.864Z",
     "failureCount": 0,
     "lastError": null
   },
   "amazon-small-business-news": {
-    "lastSuccessAt": "2026-09-18T10:08:39.156Z",
+    "lastSuccessAt": "2026-09-24T16:27:30.323Z",
     "lastFailureAt": null,
     "failureCount": 0,
     "lastError": null
   },
   "amazon-ads-newsroom": {
-    "lastSuccessAt": "2026-09-18T10:08:39.156Z",
+    "lastSuccessAt": "2026-09-24T16:27:30.323Z",
     "lastFailureAt": null,
     "failureCount": 0,
     "lastError": null
