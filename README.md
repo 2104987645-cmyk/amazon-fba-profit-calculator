@@ -8,7 +8,7 @@ Use a Node 20 LTS (or supported LTS) runtime for production so the static fronte
 node server.js
 ```
 
-Optional environment variables are `HOST`, `PORT`, `OPENAI_API_KEY`, and `BRAVE_SEARCH_API_KEY`. The server defaults to `HOST=0.0.0.0` and `PORT=8000` for CLI production startup. Do not place API keys in browser assets or commit a `.env` file. GitHub Pages remains a static preview; its `/api/knowledge/*` endpoints are not available without the Node same-origin runtime.
+Optional environment variables are `HOST`, `PORT`, `DEEPSEEK_API_KEY`, `OPENAI_API_KEY`, and `BRAVE_SEARCH_API_KEY`. The server defaults to `HOST=0.0.0.0` and `PORT=8000` for CLI production startup. Knowledge planning and claim verification select DeepSeek first, then OpenAI as a startup fallback, otherwise remain unavailable; search configuration is independent. Do not place API keys in browser assets or commit a `.env` file. GitHub Pages remains a static preview; its `/api/knowledge/*` endpoints are not available without the Node same-origin runtime.
 
 ## Auto News Update V1
 

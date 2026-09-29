@@ -14,6 +14,8 @@ const HttpDocument = require('./knowledge-http-document-transport');
 const ProductionVerifier = require('./knowledge-production-claim-verifier');
 const OpenAIAdapter = require('./knowledge-openai-claim-verifier');
 const OpenAIQueryPlanner = require('./knowledge-openai-query-planner');
+const DeepSeekAdapter = require('./knowledge-deepseek-claim-verifier');
+const DeepSeekQueryPlanner = require('./knowledge-deepseek-query-planner');
 const ClaimPreparation = require('./knowledge-claim-preparation');
 const QueryUnderstanding = require('./knowledge-query-understanding');
 
@@ -456,26 +458,34 @@ function createProductionDocumentTransport(options = {}) {
 }
 
 function createProductionClaimVerifier(env, options = {}) {
-  const apiKey = env && typeof env.OPENAI_API_KEY === 'string' ? env.OPENAI_API_KEY.trim() : '';
+  const deepSeekApiKey = env && typeof env.DEEPSEEK_API_KEY === 'string' ? env.DEEPSEEK_API_KEY.trim() : '';
+  const openAiApiKey = env && typeof env.OPENAI_API_KEY === 'string' ? env.OPENAI_API_KEY.trim() : '';
   const fetchImpl = options.fetchImpl;
-  if (!apiKey || (fetchImpl === undefined && typeof globalThis.fetch !== 'function') || (fetchImpl !== undefined && typeof fetchImpl !== 'function')) return undefined;
-  const adapter = OpenAIAdapter.createOpenAIClaimVerifierAdapter({
-    apiKey,
+  if ((fetchImpl === undefined && typeof globalThis.fetch !== 'function') || (fetchImpl !== undefined && typeof fetchImpl !== 'function')) return undefined;
+  if (!deepSeekApiKey && !openAiApiKey) return undefined;
+  const adapter = deepSeekApiKey
+    ? DeepSeekAdapter.createDeepSeekClaimVerifierAdapter({ apiKey: deepSeekApiKey, ...(fetchImpl === undefined ? {} : { fetchImpl }) })
+    : OpenAIAdapter.createOpenAIClaimVerifierAdapter({
+    apiKey: openAiApiKey,
     ...(fetchImpl === undefined ? {} : { fetchImpl })
   });
   return ProductionVerifier.createProductionClaimVerifier({ verifyImpl: adapter.verifyImpl });
 }
 
 function createProductionClaimPreparation(env, options = {}) {
-  const apiKey = env && typeof env.OPENAI_API_KEY === 'string' ? env.OPENAI_API_KEY.trim() : '';
+  const deepSeekApiKey = env && typeof env.DEEPSEEK_API_KEY === 'string' ? env.DEEPSEEK_API_KEY.trim() : '';
+  const openAiApiKey = env && typeof env.OPENAI_API_KEY === 'string' ? env.OPENAI_API_KEY.trim() : '';
   const fetchImpl = options.fetchImpl;
-  if (!apiKey || (fetchImpl === undefined && typeof globalThis.fetch !== 'function') || (fetchImpl !== undefined && typeof fetchImpl !== 'function')) return undefined;
-  const adapter = OpenAIQueryPlanner.createOpenAIQueryPlanner({ apiKey, ...(fetchImpl === undefined ? {} : { fetchImpl }) });
+  if ((fetchImpl === undefined && typeof globalThis.fetch !== 'function') || (fetchImpl !== undefined && typeof fetchImpl !== 'function')) return undefined;
+  if (!deepSeekApiKey && !openAiApiKey) return undefined;
+  const adapter = deepSeekApiKey
+    ? DeepSeekQueryPlanner.createDeepSeekQueryPlanner({ apiKey: deepSeekApiKey, ...(fetchImpl === undefined ? {} : { fetchImpl }) })
+    : OpenAIQueryPlanner.createOpenAIQueryPlanner({ apiKey: openAiApiKey, ...(fetchImpl === undefined ? {} : { fetchImpl }) });
   return ClaimPreparation.createClaimPreparation({ plannerImpl: adapter.plannerImpl });
 }
 
 function createProductionServerOptions(options = {}) {
-  const { env = process.env, fetchImpl, endpoint, documentFetchImpl, openAIFetchImpl, openAIPlannerFetchImpl, documentTransportOptions = {}, ...serverOptions } = options;
+  const { env = process.env, fetchImpl, endpoint, documentFetchImpl, openAIFetchImpl, openAIPlannerFetchImpl, deepSeekFetchImpl, deepSeekPlannerFetchImpl, documentTransportOptions = {}, ...serverOptions } = options;
   return {
     ...serverOptions,
     searchTransport: serverOptions.searchTransport === undefined
@@ -485,10 +495,10 @@ function createProductionServerOptions(options = {}) {
       ? createProductionDocumentTransport({ ...documentTransportOptions, ...(documentFetchImpl === undefined ? {} : { fetchImpl: documentFetchImpl }) })
       : serverOptions.documentTransport,
     claimVerifier: serverOptions.claimVerifier === undefined
-      ? createProductionClaimVerifier(env, openAIFetchImpl === undefined ? {} : { fetchImpl: openAIFetchImpl })
+      ? createProductionClaimVerifier(env, (env && typeof env.DEEPSEEK_API_KEY === 'string' && env.DEEPSEEK_API_KEY.trim()) ? (deepSeekFetchImpl === undefined ? {} : { fetchImpl: deepSeekFetchImpl }) : (openAIFetchImpl === undefined ? {} : { fetchImpl: openAIFetchImpl }))
       : serverOptions.claimVerifier,
     claimPreparation: serverOptions.claimPreparation === undefined
-      ? createProductionClaimPreparation(env, openAIPlannerFetchImpl === undefined ? {} : { fetchImpl: openAIPlannerFetchImpl })
+      ? createProductionClaimPreparation(env, (env && typeof env.DEEPSEEK_API_KEY === 'string' && env.DEEPSEEK_API_KEY.trim()) ? (deepSeekPlannerFetchImpl === undefined ? {} : { fetchImpl: deepSeekPlannerFetchImpl }) : (openAIPlannerFetchImpl === undefined ? {} : { fetchImpl: openAIPlannerFetchImpl }))
       : serverOptions.claimPreparation
   };
 }

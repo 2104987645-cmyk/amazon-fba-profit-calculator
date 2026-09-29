@@ -81,6 +81,25 @@ async function run() {
     assert.equal(Server.createProductionClaimVerifier(env, { fetchImpl: async () => providerResponse(200, {}) }), undefined);
     assert.deepEqual(env, snapshot);
   }
+  let deepSeekCalls = 0;
+  const deepSeekOnly = Server.createProductionServerOptions({
+    env: { DEEPSEEK_API_KEY: 'deepseek-only' },
+    deepSeekFetchImpl: async (url, options) => {
+      deepSeekCalls += 1;
+      assert.equal(url, 'https://api.deepseek.com/responses');
+      assert.equal(options.headers.Authorization, 'Bearer deepseek-only');
+      return providerResponse(200, { output: [{ content: [{ type: 'output_text', text: JSON.stringify({ status: 'supports', supportStrength: 'direct', excerpt: 'official definition', rationale: null, verifierType: 'ignored', metadata: {} }) }] }] });
+    },
+    deepSeekPlannerFetchImpl: async () => providerResponse(200, { output: [{ content: [{ type: 'output_text', text: JSON.stringify({ status: 'unsupported', claims: [], ambiguities: [], confidence: 'low', metadata: {} }) }] }] })
+  });
+  assert.equal(typeof deepSeekOnly.claimVerifier.verify, 'function');
+  assert.equal(typeof deepSeekOnly.claimPreparation.prepareClaimsFromUnderstanding, 'function');
+  const deepSeekVerifier = await deepSeekOnly.claimVerifier.verify(validClaim(), { candidateId: 'deepseek-candidate', claimId: 'vine', retrievalItemId: 'deepseek-item', sourceId: 'amazon-seller-help', providerId: 'amazon-seller-help-provider', url: 'https://sellercentral.amazon.com/help/vine', externalId: null, content: 'Vine Pre-Launch official definition.', excerpt: 'official definition' }, {});
+  assert.equal(deepSeekVerifier.metadata.provider, 'deepseek');
+  assert.equal(deepSeekCalls, 1);
+  const bothProviders = Server.createProductionServerOptions({ env: { DEEPSEEK_API_KEY: 'deepseek-wins', OPENAI_API_KEY: 'openai-loses' }, deepSeekFetchImpl: async () => providerResponse(200, { output: [{ content: [{ type: 'output_text', text: JSON.stringify({ status: 'supports', supportStrength: 'direct', excerpt: 'official definition', rationale: null, verifierType: 'ignored', metadata: {} }) }] }] }), deepSeekPlannerFetchImpl: async () => providerResponse(200, { output: [{ content: [{ type: 'output_text', text: JSON.stringify({ status: 'unsupported', claims: [], ambiguities: [], confidence: 'low', metadata: {} }) }] }] }) });
+  const bothOutput = await bothProviders.claimVerifier.verify(validClaim(), { candidateId: 'both-candidate', claimId: 'vine', retrievalItemId: 'both-item', sourceId: 'amazon-seller-help', providerId: 'amazon-seller-help-provider', url: 'https://sellercentral.amazon.com/help/vine', externalId: null, content: 'Vine Pre-Launch official definition.', excerpt: 'official definition' }, {});
+  assert.equal(bothOutput.metadata.provider, 'deepseek');
   const productionEnv = { BRAVE_SEARCH_API_KEY: '  test-production-key  ', OPENAI_API_KEY: '  test-openai-key  ' };
   const productionEnvSnapshot = structuredClone(productionEnv);
   const productionFetchCalls = [];
