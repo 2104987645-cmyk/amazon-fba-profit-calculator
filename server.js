@@ -3,6 +3,7 @@
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
+const net = require('node:net');
 const Access = require('./knowledge-source-access-registry');
 const Url = require('./knowledge-live-url-validator');
 const Claims = require('./knowledge-claim-contracts');
@@ -19,7 +20,11 @@ const QueryUnderstanding = require('./knowledge-query-understanding');
 const BODY_LIMIT_BYTES = 256 * 1024;
 const REQUEST_TIMEOUT_MS = 15 * 1000;
 const DEFAULT_HOST = '127.0.0.1';
+const DEFAULT_PRODUCTION_HOST = '0.0.0.0';
 const DEFAULT_PORT = 8000;
+const DEFAULT_RATE_LIMITS = Object.freeze({ plan: 20, verify: 30, search: 60, document: 60 });
+const DEFAULT_RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const DEFAULT_RATE_LIMIT_MAX_ENTRIES = 10_000;
 const MVP_PAIRS = Object.freeze({
   'amazon-seller-help': 'amazon-seller-help-provider',
   'amazon-seller-university': 'amazon-seller-university-provider',
@@ -52,8 +57,69 @@ function errorEnvelope(requestId, errorCode, errorMessage) {
 
 function sendJson(response, statusCode, body) {
   const payload = JSON.stringify(body);
+  applySecurityHeaders(response);
   response.writeHead(statusCode, { 'Content-Type': 'application/json; charset=utf-8', 'Content-Length': Buffer.byteLength(payload), 'Cache-Control': 'no-store' });
   response.end(payload);
+}
+
+function applySecurityHeaders(response) {
+  response.setHeader('X-Content-Type-Options', 'nosniff');
+  response.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  response.setHeader('X-Frame-Options', 'DENY');
+}
+
+function parsePort(value) {
+  if (typeof value !== 'string' || !/^[1-9]\d*$/.test(value.trim())) return DEFAULT_PORT;
+  const port = Number(value.trim());
+  return Number.isInteger(port) && port >= 1 && port <= 65535 ? port : DEFAULT_PORT;
+}
+
+function resolveCliBinding(env = process.env) {
+  const host = env && typeof env.HOST === 'string' && env.HOST.trim() ? env.HOST.trim() : DEFAULT_PRODUCTION_HOST;
+  return { host, port: parsePort(env && env.PORT) };
+}
+
+function rateLimitName(pathname) {
+  return pathname.slice('/api/knowledge/'.length);
+}
+
+function clientIp(request, trustProxy) {
+  if (trustProxy) {
+    const forwarded = request.headers && request.headers['x-forwarded-for'];
+    const first = typeof forwarded === 'string' ? forwarded.split(',')[0].trim() : '';
+    if (net.isIP(first)) return first;
+  }
+  return request.socket && request.socket.remoteAddress ? request.socket.remoteAddress : 'unknown';
+}
+
+function createRateLimiter(options = {}) {
+  const windowMs = Number.isInteger(options.windowMs) && options.windowMs > 0 ? options.windowMs : DEFAULT_RATE_LIMIT_WINDOW_MS;
+  const maxEntries = Number.isInteger(options.maxEntries) && options.maxEntries > 0 ? options.maxEntries : DEFAULT_RATE_LIMIT_MAX_ENTRIES;
+  const limits = { ...DEFAULT_RATE_LIMITS, ...(isObject(options.limits) ? options.limits : {}) };
+  const entries = new Map();
+  const now = typeof options.now === 'function' ? options.now : Date.now;
+
+  function cleanup(current) {
+    for (const [key, entry] of entries) if (entry.resetAt <= current) entries.delete(key);
+    while (entries.size >= maxEntries) entries.delete(entries.keys().next().value);
+  }
+
+  return {
+    check(request, pathname) {
+      const name = rateLimitName(pathname);
+      const limit = limits[name];
+      if (!Number.isInteger(limit) || limit < 1) return { allowed: true };
+      const current = now();
+      cleanup(current);
+      const key = `${clientIp(request, options.trustProxy === true)}:${name}`;
+      const entry = entries.get(key) || { count: 0, resetAt: current + windowMs };
+      if (entry.count >= limit) return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil((entry.resetAt - current) / 1000)) };
+      entry.count += 1;
+      entries.set(key, entry);
+      return { allowed: true };
+    },
+    size() { return entries.size; }
+  };
 }
 
 function validatePair(body) {
@@ -158,6 +224,20 @@ function safeStaticPath(rootDir, requestPath) {
   return filePath;
 }
 
+function frontendAssetPaths(rootDir) {
+  const indexPath = path.join(rootDir, 'index.html');
+  let html = '';
+  try { html = fs.readFileSync(indexPath, 'utf8'); } catch (_) { return new Set(['index.html']); }
+  const assets = new Set(['index.html']);
+  const pattern = /(?:src|href)=["']([^"']+)["']/gi;
+  let match;
+  while ((match = pattern.exec(html))) {
+    const value = match[1].split('?')[0];
+    if (value && !/^[a-z][a-z0-9+.-]*:/i.test(value) && !value.startsWith('//')) assets.add(value.replace(/^\/+/, ''));
+  }
+  return assets;
+}
+
 function createAppServer(options = {}) {
   const rootDir = path.resolve(options.rootDir || __dirname);
   const host = options.host || DEFAULT_HOST;
@@ -167,12 +247,14 @@ function createAppServer(options = {}) {
   const documentTransport = options.documentTransport;
   const claimVerifier = options.claimVerifier;
   const claimPreparation = options.claimPreparation;
+  const rateLimiter = options.rateLimiter || createRateLimiter({ ...(isObject(options.rateLimit) ? options.rateLimit : {}), trustProxy: options.trustProxy === true });
+  const allowedStaticAssets = frontendAssetPaths(rootDir);
   Transports.assertTransportConfiguration(searchTransport, documentTransport);
   if (claimVerifier !== undefined && (!claimVerifier || typeof claimVerifier.verify !== 'function')) throw Error('INVALID_CLAIM_VERIFIER');
   if (claimPreparation !== undefined && (!claimPreparation || typeof claimPreparation.prepareClaimsFromUnderstanding !== 'function')) throw Error('INVALID_CLAIM_PREPARATION');
 
-  function log(request, statusCode, startedAt, requestId) {
-    if (logger) logger({ method: request.method, path: new URL(request.url, 'http://localhost').pathname, requestId: requestIdOf(requestId), statusCode, durationMs: Date.now() - startedAt });
+  function log(request, statusCode, startedAt, requestId, rateLimited = false) {
+    if (logger) logger({ method: request.method, path: new URL(request.url, 'http://localhost').pathname, requestId: requestIdOf(requestId), statusCode, durationMs: Date.now() - startedAt, rateLimited });
   }
 
   function sendError(request, response, startedAt, statusCode, requestId, code, message) {
@@ -181,9 +263,33 @@ function createAppServer(options = {}) {
   }
 
   async function handleApi(request, response, startedAt, pathname) {
+    if (pathname === '/api/health') {
+      if (request.method !== 'GET') {
+        response.setHeader('Allow', 'GET');
+        sendError(request, response, startedAt, 405, null, 'METHOD_NOT_ALLOWED', 'Only GET is allowed.');
+        return;
+      }
+      const health = {
+        plannerConfigured: Boolean(claimPreparation),
+        verifierConfigured: Boolean(claimVerifier),
+        searchConfigured: Boolean(searchTransport),
+        documentConfigured: Boolean(documentTransport)
+      };
+      health.status = Object.values(health).every(Boolean) ? 'ok' : 'degraded';
+      sendJson(response, 200, health);
+      log(request, 200, startedAt, null);
+      return;
+    }
     if (request.method !== 'POST') {
       response.setHeader('Allow', 'POST');
       sendError(request, response, startedAt, 405, null, 'METHOD_NOT_ALLOWED', 'Only POST is allowed.');
+      return;
+    }
+    const rateLimit = rateLimiter.check(request, pathname);
+    if (!rateLimit.allowed) {
+      response.setHeader('Retry-After', String(rateLimit.retryAfterSeconds));
+      sendJson(response, 429, errorEnvelope(null, 'RATE_LIMITED', 'Too many requests.'));
+      log(request, 429, startedAt, null, true);
       return;
     }
     let body;
@@ -275,7 +381,7 @@ function createAppServer(options = {}) {
       sendError(request, response, startedAt, 400, null, 'INVALID_REQUEST', 'Invalid request URL.');
       return;
     }
-    if (pathname.startsWith('/api/knowledge/')) {
+    if (pathname === '/api/health' || pathname.startsWith('/api/knowledge/')) {
       await handleApi(request, response, startedAt, pathname);
       return;
     }
@@ -285,12 +391,18 @@ function createAppServer(options = {}) {
       return;
     }
     const filePath = safeStaticPath(rootDir, rawPath);
+    const relativePath = filePath ? path.relative(rootDir, filePath).replace(/\\/g, '/') : null;
     if (!filePath) {
       sendError(request, response, startedAt, 403, null, 'STATIC_PATH_NOT_ALLOWED', 'Static path is not allowed.');
       return;
     }
+    if (!allowedStaticAssets.has(relativePath)) {
+      sendError(request, response, startedAt, 404, null, 'STATIC_NOT_FOUND', 'Static file was not found.');
+      return;
+    }
     try {
       const data = await fs.promises.readFile(filePath);
+      applySecurityHeaders(response);
       response.writeHead(200, { 'Content-Type': CONTENT_TYPES[path.extname(filePath).toLowerCase()] || 'application/octet-stream', 'Content-Length': data.length });
       if (request.method !== 'HEAD') response.end(data); else response.end();
       log(request, 200, startedAt, null);
@@ -381,15 +493,29 @@ function createProductionServerOptions(options = {}) {
   };
 }
 
-module.exports = { BODY_LIMIT_BYTES, REQUEST_TIMEOUT_MS, DEFAULT_HOST, DEFAULT_PORT, MVP_PAIRS, createAppServer, startServer, createProductionSearchTransport, createProductionDocumentTransport, createProductionClaimVerifier, createProductionClaimPreparation, createProductionServerOptions };
+function installGracefulShutdown(app, processImpl = process) {
+  let closing = false;
+  const shutdown = () => {
+    if (closing) return;
+    closing = true;
+    Promise.resolve(app.close()).catch(() => {}).finally(() => { processImpl.exitCode = 0; });
+  };
+  processImpl.once('SIGINT', shutdown);
+  processImpl.once('SIGTERM', shutdown);
+  return shutdown;
+}
+
+module.exports = { BODY_LIMIT_BYTES, REQUEST_TIMEOUT_MS, DEFAULT_HOST, DEFAULT_PRODUCTION_HOST, DEFAULT_PORT, DEFAULT_RATE_LIMITS, MVP_PAIRS, createAppServer, startServer, createRateLimiter, resolveCliBinding, installGracefulShutdown, createProductionSearchTransport, createProductionDocumentTransport, createProductionClaimVerifier, createProductionClaimPreparation, createProductionServerOptions };
 
 if (require.main === module) {
-  const options = createProductionServerOptions();
+  const binding = resolveCliBinding(process.env);
+  const options = createProductionServerOptions(binding);
   process.stdout.write(`Knowledge search provider: ${options.searchTransport ? 'configured' : 'not configured'}\n`);
   process.stdout.write(`Knowledge claim verifier: ${options.claimVerifier ? 'configured' : 'not configured'}\n`);
   process.stdout.write(`Knowledge query planner: ${options.claimPreparation ? 'configured' : 'not configured'}\n`);
-  startServer(options).then(() => {
-    process.stdout.write(`Amazon Workbench server running at http://${DEFAULT_HOST}:${DEFAULT_PORT}\n`);
+  startServer(options).then(app => {
+    installGracefulShutdown(app);
+    process.stdout.write(`Amazon Workbench server running at http://${binding.host}:${binding.port}\n`);
   }).catch(() => {
     process.stderr.write('Amazon Workbench server failed to start.\n');
     process.exitCode = 1;

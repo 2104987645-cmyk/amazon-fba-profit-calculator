@@ -1,5 +1,15 @@
 # Amazon Seller Workbench
 
+## Production knowledge runtime (V1)
+
+Use a Node 20 LTS (or supported LTS) runtime for production so the static frontend and Knowledge API share one origin:
+
+```powershell
+node server.js
+```
+
+Optional environment variables are `HOST`, `PORT`, `OPENAI_API_KEY`, and `BRAVE_SEARCH_API_KEY`. The server defaults to `HOST=0.0.0.0` and `PORT=8000` for CLI production startup. Do not place API keys in browser assets or commit a `.env` file. GitHub Pages remains a static preview; its `/api/knowledge/*` endpoints are not available without the Node same-origin runtime.
+
 ## Auto News Update V1
 
 `#/news` 现已包含独立的“待审核情报”区域。GitHub Actions 每天按北京时间 08:00、14:00、20:00 检查 Amazon Sell 官方公告、Amazon News Small Business 与 Amazon Ads 新闻中心。抓取结果只写入 `data/incoming-news.json`，不会自动进入正式 `news-data.js`，也不会触发 Dashboard / Action Center。

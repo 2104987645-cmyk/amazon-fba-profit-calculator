@@ -10,10 +10,10 @@ const HttpDocument = require('../knowledge-http-document-transport');
 const OpenAIAdapter = require('../knowledge-openai-claim-verifier');
 const ProductionVerifier = require('../knowledge-production-claim-verifier');
 
-function request(address, method, pathname, body) {
+function request(address, method, pathname, body, headers = {}) {
   return new Promise((resolve, reject) => {
     const payload = body === undefined ? null : Buffer.isBuffer(body) ? body : Buffer.from(JSON.stringify(body));
-    const req = http.request({ hostname: '127.0.0.1', port: address.port, method, path: pathname, headers: payload ? { 'Content-Type': 'application/json', 'Content-Length': payload.length } : {} }, res => {
+    const req = http.request({ hostname: '127.0.0.1', port: address.port, method, path: pathname, headers: { ...(payload ? { 'Content-Type': 'application/json', 'Content-Length': payload.length } : {}), ...headers } }, res => {
       const chunks = [];
       res.on('data', chunk => chunks.push(chunk));
       res.on('end', () => {
@@ -66,6 +66,9 @@ async function run() {
   assert.equal(typeof Server.createProductionDocumentTransport, 'function');
   assert.equal(typeof Server.createProductionClaimVerifier, 'function');
   assert.equal(typeof Server.createProductionServerOptions, 'function');
+  assert.deepEqual(Server.resolveCliBinding({}), { host: '0.0.0.0', port: 8000 });
+  assert.deepEqual(Server.resolveCliBinding({ HOST: '127.0.0.1', PORT: '3030' }), { host: '127.0.0.1', port: 3030 });
+  for (const port of ['0', '-1', '65536', 'x', '1.2', '']) assert.equal(Server.resolveCliBinding({ PORT: port }).port, 8000);
   const emptyEnvironments = [{}, { BRAVE_SEARCH_API_KEY: '' }, { BRAVE_SEARCH_API_KEY: '   ' }];
   for (const env of emptyEnvironments) {
     const snapshot = structuredClone(env);
@@ -128,11 +131,21 @@ async function run() {
     response = await request(address, 'GET', '/knowledge-page.css');
     assert.equal(response.statusCode, 200);
     assert.match(response.headers['content-type'], /text\/css/);
-    response = await request(address, 'GET', '/%2e%2e/%2e%2e/server.js');
-    assert.notEqual(response.statusCode, 200);
-    assert.doesNotMatch(response.text, /const http/);
+    for (const pathname of ['/server.js', '/knowledge-openai-query-planner.js', '/knowledge-openai-claim-verifier.js', '/tests/knowledge-runtime-server.test.js', '/.env', '/.git/config', '/%2e%2e/%2e%2e/server.js']) {
+      response = await request(address, 'GET', pathname);
+      assert.notEqual(response.statusCode, 200, `${pathname} must not be a public asset`);
+      assert.doesNotMatch(response.text, /OPENAI_API_KEY|const http/);
+    }
     response = await request(address, 'GET', '/does-not-exist.js');
     assert.equal(response.statusCode, 404);
+    assert.equal(response.headers['x-content-type-options'], 'nosniff');
+    assert.equal(response.headers['referrer-policy'], 'strict-origin-when-cross-origin');
+    assert.equal(response.headers['x-frame-options'], 'DENY');
+
+    response = await request(address, 'GET', '/api/health');
+    assert.deepEqual(response.json, { plannerConfigured: false, verifierConfigured: false, searchConfigured: false, documentConfigured: false, status: 'degraded' });
+    response = await request(address, 'POST', '/api/health', {});
+    assert.equal(response.statusCode, 405);
 
     response = await request(address, 'POST', '/api/knowledge/search', searchRequest());
     assert.equal(response.statusCode, 200);
@@ -186,7 +199,7 @@ async function run() {
     assert.equal(response.statusCode, 200);
     assert.ok(logs.length);
     const lastLog = logs.at(-1);
-    assert.deepEqual(Object.keys(lastLog).sort(), ['durationMs', 'method', 'path', 'requestId', 'statusCode']);
+    assert.deepEqual(Object.keys(lastLog).sort(), ['durationMs', 'method', 'path', 'rateLimited', 'requestId', 'statusCode']);
     assert.equal(JSON.stringify(logs).includes('<sensitive query>'), false);
     const source = fs.readFileSync(require.resolve('../server'), 'utf8');
     assert.doesNotMatch(source, /require\(['"](?:node:)?https['"]\)|\bfetch\s*\(|axios|require\(['"]openai['"]\)|anthropic|gemini|embedding/i);
@@ -195,6 +208,44 @@ async function run() {
   } finally {
     await app.close();
   }
+
+  const limited = Server.createAppServer({ rootDir: path.join(__dirname, '..'), host: '127.0.0.1', port: 0, rateLimit: { limits: { search: 1, document: 1, verify: 1, plan: 1 }, windowMs: 60_000, maxEntries: 2 } });
+  const limitedAddress = await limited.start();
+  try {
+    let response = await request(limitedAddress, 'POST', '/api/knowledge/search', searchRequest());
+    assert.equal(response.statusCode, 200);
+    response = await request(limitedAddress, 'POST', '/api/knowledge/search', searchRequest({ requestId: 'search-2' }));
+    assert.equal(response.statusCode, 429);
+    assert.equal(response.json.errorCode, 'RATE_LIMITED');
+    assert.ok(Number(response.headers['retry-after']) >= 1);
+    response = await request(limitedAddress, 'GET', '/api/health');
+    assert.equal(response.statusCode, 200);
+    response = await request(limitedAddress, 'GET', '/');
+    assert.equal(response.statusCode, 200);
+  } finally {
+    await limited.close();
+  }
+
+  let clock = 0;
+  const limiter = Server.createRateLimiter({ limits: { search: 1 }, windowMs: 10, maxEntries: 2, now: () => clock });
+  const fakeRequest = ip => ({ headers: {}, socket: { remoteAddress: ip } });
+  assert.equal(limiter.check(fakeRequest('10.0.0.1'), '/api/knowledge/search').allowed, true);
+  assert.equal(limiter.check(fakeRequest('10.0.0.1'), '/api/knowledge/search').allowed, false);
+  assert.equal(limiter.check(fakeRequest('10.0.0.2'), '/api/knowledge/search').allowed, true);
+  clock = 11;
+  assert.equal(limiter.check(fakeRequest('10.0.0.3'), '/api/knowledge/search').allowed, true);
+  assert.ok(limiter.size() <= 2);
+  const proxyLimiter = Server.createRateLimiter({ limits: { search: 1 }, trustProxy: true });
+  assert.equal(proxyLimiter.check({ headers: { 'x-forwarded-for': '203.0.113.1, 10.0.0.1' }, socket: { remoteAddress: '10.0.0.1' } }, '/api/knowledge/search').allowed, true);
+  assert.equal(proxyLimiter.check({ headers: { 'x-forwarded-for': '203.0.113.1' }, socket: { remoteAddress: '10.0.0.2' } }, '/api/knowledge/search').allowed, false);
+
+  let closes = 0;
+  const signals = new (require('node:events').EventEmitter)();
+  Server.installGracefulShutdown({ close: async () => { closes += 1; } }, signals);
+  signals.emit('SIGTERM');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(closes, 1);
+
   const productionApp = Server.createAppServer({
     rootDir: path.join(__dirname, '..'),
     host: '127.0.0.1',
@@ -203,6 +254,8 @@ async function run() {
   });
   const productionAddress = await productionApp.start();
   try {
+    let health = await request(productionAddress, 'GET', '/api/health');
+    assert.deepEqual(health.json, { plannerConfigured: true, verifierConfigured: true, searchConfigured: true, documentConfigured: true, status: 'ok' });
     let response = await request(productionAddress, 'POST', '/api/knowledge/search', searchRequest({ requestId: 'configured-search' }));
     assert.equal(response.json.status, 'ok');
     assert.equal(response.json.errorCode, null);
