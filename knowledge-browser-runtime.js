@@ -3,11 +3,12 @@
     typeof module === 'object' && module.exports ? require('./knowledge-live-adapters') : root.KnowledgeLiveAdapters,
     typeof module === 'object' && module.exports ? require('./knowledge-query-orchestrator') : root.KnowledgeQueryOrchestrator,
     typeof module === 'object' && module.exports ? require('./knowledge-query-preparation') : root.KnowledgeQueryPreparation,
-    typeof module === 'object' && module.exports ? require('./knowledge-query-understanding') : root.KnowledgeQueryUnderstanding
+    typeof module === 'object' && module.exports ? require('./knowledge-query-understanding') : root.KnowledgeQueryUnderstanding,
+    root
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.KnowledgeBrowserRuntime = api;
-})(typeof window !== 'undefined' ? window : globalThis, function (LiveAdapters, Orchestrator, Preparation, Understanding) {
+})(typeof window !== 'undefined' ? window : globalThis, function (LiveAdapters, Orchestrator, Preparation, Understanding, runtimeGlobal) {
   'use strict';
 
   const ENDPOINTS = Object.freeze({
@@ -96,7 +97,7 @@
   }
 
   function createBrowserKnowledgeRuntime(options = {}) {
-    const fetchImpl = options.fetchImpl === undefined ? root.fetch : options.fetchImpl;
+    const fetchImpl = options.fetchImpl === undefined ? runtimeGlobal.fetch : options.fetchImpl;
     const prefix = baseUrl(options.baseUrl);
     const endpoints = Object.freeze(Object.fromEntries(Object.entries(ENDPOINTS).map(([name, path]) => [name, `${prefix}${path}`])));
     const ready = typeof fetchImpl === 'function' && LiveAdapters && typeof LiveAdapters.createLiveAdapters === 'function' && Orchestrator && typeof Orchestrator.executeKnowledgeQuery === 'function' && Preparation && Understanding;

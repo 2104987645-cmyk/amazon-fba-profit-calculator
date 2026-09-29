@@ -1,6 +1,8 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
 const Runtime = require('../knowledge-browser-runtime');
 const Preparation = require('../knowledge-query-preparation');
 
@@ -28,6 +30,27 @@ function claim() {
 async function run() {
   assert.equal(typeof Runtime.createBrowserKnowledgeRuntime, 'function');
   assert.deepEqual(Runtime.ENDPOINTS, { search: '/api/knowledge/search', document: '/api/knowledge/document', verify: '/api/knowledge/verify', plan: '/api/knowledge/plan' });
+
+  const browserCalls = [];
+  const browserWindow = {
+    fetch: async (url, options) => {
+      browserCalls.push({ url, options });
+      return response(200, { status: 'empty', results: [] });
+    },
+    KnowledgeLiveAdapters: { createLiveAdapters: () => ({}) },
+    KnowledgeQueryOrchestrator: { executeKnowledgeQuery: async () => ({}) },
+    KnowledgeQueryPreparation: {},
+    KnowledgeQueryUnderstanding: {}
+  };
+  const browserSource = fs.readFileSync(require.resolve('../knowledge-browser-runtime'), 'utf8');
+  vm.runInNewContext(browserSource, { window: browserWindow, globalThis: browserWindow });
+  assert.equal(typeof browserWindow.KnowledgeBrowserRuntime.createBrowserKnowledgeRuntime, 'function');
+  const browserRuntime = browserWindow.KnowledgeBrowserRuntime.createBrowserKnowledgeRuntime();
+  assert.equal(browserRuntime.status, 'ready');
+  assert.equal(browserCalls.length, 0, 'runtime construction must not issue startup requests');
+  assert.equal((await browserRuntime.transports.search.search({ requestId: 'browser-global', query: 'Vine' })).status, 'empty');
+  assert.equal(browserCalls[0].url, '/api/knowledge/search');
+  assert.equal(browserCalls[0].options.headers.Authorization, undefined);
 
   const calls = [];
   const runtime = Runtime.createBrowserKnowledgeRuntime({
