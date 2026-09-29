@@ -27,7 +27,7 @@ function claim() {
 
 async function run() {
   assert.equal(typeof Runtime.createBrowserKnowledgeRuntime, 'function');
-  assert.deepEqual(Runtime.ENDPOINTS, { search: '/api/knowledge/search', document: '/api/knowledge/document', verify: '/api/knowledge/verify' });
+  assert.deepEqual(Runtime.ENDPOINTS, { search: '/api/knowledge/search', document: '/api/knowledge/document', verify: '/api/knowledge/verify', plan: '/api/knowledge/plan' });
 
   const calls = [];
   const runtime = Runtime.createBrowserKnowledgeRuntime({
@@ -37,6 +37,7 @@ async function run() {
       if (url.endsWith('/search')) return response(200, { requestId: 'retrieval-vine', status: 'ok', results: [{ externalId: 'vine-result', title: 'Vine', url: 'https://sellercentral.amazon.com/help/vine', snippet: 'Vine definition', publisher: 'Amazon', author: null, publishedAt: null, officialAuthorVerified: null, rank: 1, metadata: {} }], errorCode: null, errorMessage: null });
       if (url.endsWith('/document')) return response(200, { requestId: 'retrieval-vine', status: 'ok', url: 'https://sellercentral.amazon.com/help/vine', finalUrl: 'https://sellercentral.amazon.com/help/vine', text: 'Vine definition', title: 'Vine', publisher: 'Amazon', author: null, publishedAt: null, effectiveAt: null, errorCode: null, errorMessage: null });
       if (url.endsWith('/verify')) return response(200, { status: 'supports', supportStrength: 'direct', excerpt: 'Vine definition', rationale: 'Direct support.', verifierType: 'server', metadata: {} });
+      if (url.endsWith('/plan')) return response(200, { status: 'ready', claims: [{ claimId: 'uk-open', text: 'Verify current UK SIPP applicability requirements.', claimType: 'eligibility', topic: 'fba-logistics', intent: 'requirements', marketplaces: ['UK'], regions: [], requestedYear: '2026', freshness: 'current', authorityRequirement: { mustInclude: ['amazon-official'] }, temporalRequirement: { mode: 'current', maxAgeDays: 30 }, metadata: {} }], ambiguities: [], confidence: 'medium', metadata: {} });
       throw Error('unexpected endpoint');
     }
   });
@@ -70,6 +71,26 @@ async function run() {
   assert.equal(queryResult.queryId, 'browser-vine');
   assert.notEqual(queryResult.status, 'error');
   assert.ok(queryResult.answer);
+
+  const planCallsBeforeTemplate = calls.filter(call => call.url.endsWith('/plan')).length;
+  const templateResult = await runtime.executeQuestion({ question: 'Vine Pre-Launch 是什么？', queryId: 'template-fast', templateRegistry: Preparation.createProductionTemplateRegistry(), accountContext: { connected: false, metadata: {} } });
+  assert.equal(templateResult.queryId, 'template-fast');
+  assert.equal(calls.filter(call => call.url.endsWith('/plan')).length, planCallsBeforeTemplate);
+  const openResult = await runtime.executeQuestion({ question: '英国站做 SIPP 现在需要满足哪些条件？', queryId: 'open-ended', templateRegistry: Preparation.createProductionTemplateRegistry(), accountContext: { connected: false, metadata: {} } });
+  assert.equal(openResult.queryId, 'open-ended');
+  const planCalls = calls.filter(call => call.url.endsWith('/plan'));
+  assert.equal(planCalls.length, 1);
+  assert.deepEqual(Object.keys(JSON.parse(planCalls[0].options.body)).sort(), ['question', 'understanding']);
+  assert.match(planCalls[0].options.body, /英国站做 SIPP/);
+  assert.equal(Object.hasOwn(planCalls[0].options.headers, 'Authorization'), false);
+  for (const question of ['我的 ASIN 为什么不能卖？', '这个政策现在还有效吗？', '今天天气怎么样？']) {
+    const before = planCalls.length;
+    const stopped = await runtime.executeQuestion({ question, templateRegistry: Preparation.createProductionTemplateRegistry() });
+    assert.equal(stopped.kind, 'preparation');
+    assert.equal(calls.filter(call => call.url.endsWith('/plan')).length, before);
+  }
+  const unavailablePlan = Runtime.createBrowserKnowledgeRuntime({ fetchImpl: async url => url.endsWith('/plan') ? response(404, {}) : response(200, { status: 'empty', results: [] }) });
+  assert.equal((await unavailablePlan.executeQuestion({ question: '英国站做 SIPP 现在需要满足哪些条件？', templateRegistry: Preparation.createProductionTemplateRegistry() })).kind, 'planner-unavailable');
 
   for (const [serverResponse, expectedStatus] of [
     [{ status: 'empty', results: [], errorCode: null, errorMessage: null }, 'empty'],

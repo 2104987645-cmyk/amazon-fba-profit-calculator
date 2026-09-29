@@ -1,17 +1,20 @@
 (function (root, factory) {
   const api = factory(
     typeof module === 'object' && module.exports ? require('./knowledge-live-adapters') : root.KnowledgeLiveAdapters,
-    typeof module === 'object' && module.exports ? require('./knowledge-query-orchestrator') : root.KnowledgeQueryOrchestrator
+    typeof module === 'object' && module.exports ? require('./knowledge-query-orchestrator') : root.KnowledgeQueryOrchestrator,
+    typeof module === 'object' && module.exports ? require('./knowledge-query-preparation') : root.KnowledgeQueryPreparation,
+    typeof module === 'object' && module.exports ? require('./knowledge-query-understanding') : root.KnowledgeQueryUnderstanding
   );
   if (typeof module === 'object' && module.exports) module.exports = api;
   root.KnowledgeBrowserRuntime = api;
-})(typeof window !== 'undefined' ? window : globalThis, function (LiveAdapters, Orchestrator) {
+})(typeof window !== 'undefined' ? window : globalThis, function (LiveAdapters, Orchestrator, Preparation, Understanding) {
   'use strict';
 
   const ENDPOINTS = Object.freeze({
     search: '/api/knowledge/search',
     document: '/api/knowledge/document',
-    verify: '/api/knowledge/verify'
+    verify: '/api/knowledge/verify',
+    plan: '/api/knowledge/plan'
   });
   const TRANSPORT_STATUSES = new Set(['ok', 'empty', 'unavailable', 'error']);
   const VERIFICATION_STATUSES = new Set(['supports', 'contradicts', 'not-addressed', 'unclear', 'unknown']);
@@ -96,7 +99,7 @@
     const fetchImpl = options.fetchImpl === undefined ? root.fetch : options.fetchImpl;
     const prefix = baseUrl(options.baseUrl);
     const endpoints = Object.freeze(Object.fromEntries(Object.entries(ENDPOINTS).map(([name, path]) => [name, `${prefix}${path}`])));
-    const ready = typeof fetchImpl === 'function' && LiveAdapters && typeof LiveAdapters.createLiveAdapters === 'function' && Orchestrator && typeof Orchestrator.executeKnowledgeQuery === 'function';
+    const ready = typeof fetchImpl === 'function' && LiveAdapters && typeof LiveAdapters.createLiveAdapters === 'function' && Orchestrator && typeof Orchestrator.executeKnowledgeQuery === 'function' && Preparation && Understanding;
 
     const searchTransport = {
       async search(input, context = {}) {
@@ -134,11 +137,33 @@
       return Orchestrator.executeKnowledgeQuery(request, { ...resolved, adapters: resolvedAdapters });
     }
 
+    async function executeQuestion(input = {}) {
+      const question = input.question;
+      const registry = input.templateRegistry || (Preparation && Preparation.createProductionTemplateRegistry && Preparation.createProductionTemplateRegistry());
+      const template = Preparation.prepareKnowledgeQuery(question, registry);
+      if (template.status === 'invalid') return { kind: 'preparation', preparationStatus: 'invalid' };
+      if (template.status === 'matched') {
+        const request = { queryId: input.queryId || `knowledge-${Date.now()}`, question: template.originalQuestion, claims: template.claims, options: input.options || {}, metadata: { entryMode: 'exact-template', templateId: template.matchedTemplateId, normalizedQuestion: template.normalizedQuestion } };
+        if (input.sellerProfile !== undefined) request.sellerProfile = input.sellerProfile;
+        if (input.accountContext !== undefined) request.accountContext = input.accountContext;
+        return executeKnowledgeQuery(request);
+      }
+      const understanding = Understanding.understandKnowledgeQuery(question, { registry, context: input.context, analysisOptions: input.analysisOptions });
+      if (understanding.status !== 'open-ended-public') return { kind: 'preparation', preparationStatus: understanding.status, understanding };
+      const planResponse = await postJson(fetchImpl, endpoints.plan, { question, understanding }, input.signal);
+      if (!planResponse.ok || !planResponse.value || planResponse.value.status !== 'ready' || !Array.isArray(planResponse.value.claims) || !planResponse.value.claims.length || planResponse.value.claims.length > 3) return { kind: 'planner-unavailable' };
+      const request = { queryId: input.queryId || `knowledge-${Date.now()}`, question, claims: clone(planResponse.value.claims), options: input.options || {}, metadata: { entryMode: 'open-ended', topic: understanding.topic, intent: understanding.intent, normalizedQuestion: understanding.normalizedQuestion } };
+      if (input.sellerProfile !== undefined) request.sellerProfile = input.sellerProfile;
+      if (input.accountContext !== undefined) request.accountContext = input.accountContext;
+      return executeKnowledgeQuery(request);
+    }
+
     return {
       status: ready ? 'ready' : 'unavailable',
       queryDependencies,
       transports: { search: searchTransport, document: documentTransport, verify: claimVerifier },
-      executeKnowledgeQuery
+      executeKnowledgeQuery,
+      executeQuestion
     };
   }
 

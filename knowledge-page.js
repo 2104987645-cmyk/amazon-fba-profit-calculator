@@ -163,6 +163,27 @@
       statusMessage('请输入一个 Amazon 运营问题。', 'error');
       return;
     }
+    if (typeof page.executeQuestion === 'function') {
+      const queryId = createQueryId();
+      page.activeQueryId = queryId;
+      page.submit.disabled = true;
+      renderResult(null);
+      statusMessage('正在理解问题…', 'submitting');
+      try {
+        const result = await page.executeQuestion({ question, queryId, sellerProfile: page.options.sellerProfile, accountContext: page.options.accountContext, templateRegistry: page.registry });
+        if (!page || page.activeQueryId !== queryId) return;
+        if (result && result.kind === 'planner-unavailable') statusMessage('开放式知识查询服务当前不可用，请稍后再试。', 'error');
+        else if (result && result.kind === 'preparation') {
+          const messages = { 'account-specific': '这个问题需要结合你的账户数据才能判断。', ambiguous: '这个问题缺少具体政策或对象，请补充你指的是哪一项政策。', unsupported: '当前运营知识库暂不支持这个问题。', invalid: '请输入有效问题。' };
+          statusMessage(messages[result.preparationStatus] || '查询失败，请稍后再试。', 'blocked');
+        } else if (result) renderResult(result);
+      } catch (_) {
+        if (page && page.activeQueryId === queryId) statusMessage('查询失败，请稍后再试。', 'error');
+      } finally {
+        if (page && page.activeQueryId === queryId) page.submit.disabled = false;
+      }
+      return;
+    }
     const preparation = page.prepareKnowledgeQuery(question, page.registry);
     if (!preparation || preparation.status === 'invalid') {
       statusMessage('请输入有效问题。', 'error');
@@ -224,7 +245,7 @@
     feedback.setAttribute('aria-live', 'polite');
     composer.append(label, textarea, element('p', '', '当前知识库支持已注册的运营知识主题。'), button, feedback);
     host.append(header, composer, element('p', 'knowledge-idle', '你可以输入一个 Amazon 运营问题开始。'));
-    page = { options: resolvedOptions, textarea, submit: button, feedback, registry, prepareKnowledgeQuery: prepare, executeKnowledgeQuery: execute, queryDependencies: resolvedOptions.queryDependencies, activeQueryId: null };
+    page = { options: resolvedOptions, textarea, submit: button, feedback, registry, prepareKnowledgeQuery: prepare, executeKnowledgeQuery: execute, executeQuestion: resolvedOptions.executeQuestion, queryDependencies: resolvedOptions.queryDependencies, activeQueryId: null };
     button.addEventListener('click', submit);
     showSuggestions(registry);
     renderResult(resolvedOptions.initialResult);

@@ -199,6 +199,24 @@ async function run() {
   await find(host, 'button').trigger('click');
   assert.equal(find(host, '.knowledge-status').textContent, '查询执行失败，请稍后重试。');
 
+  let openEndedCalls = 0;
+  Page.mount(host, { templateRegistry: registry(), executeQuestion: async input => {
+    openEndedCalls += 1;
+    if (input.question.includes('账户')) return { kind: 'preparation', preparationStatus: 'account-specific' };
+    if (input.question.includes('服务')) return { kind: 'planner-unavailable' };
+    return result(input.queryId);
+  } });
+  find(host, 'textarea').value = '英国站做 SIPP 现在需要满足哪些条件？';
+  await find(host, 'button').trigger('click');
+  assert.equal(openEndedCalls, 1);
+  assert.match(text(host), /已完成/);
+  find(host, 'textarea').value = '我的账户需要帮助';
+  await find(host, 'button').trigger('click');
+  assert.match(find(host, '.knowledge-status').textContent, /账户数据/);
+  find(host, 'textarea').value = '服务不可用';
+  await find(host, 'button').trigger('click');
+  assert.match(find(host, '.knowledge-status').textContent, /开放式知识查询服务当前不可用/);
+
   const source = fs.readFileSync(require.resolve('../knowledge-page'), 'utf8');
   const workbench = fs.readFileSync(path.join(__dirname, '..', 'workbench.js'), 'utf8');
   const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');

@@ -12,6 +12,9 @@ const Brave = require('./knowledge-brave-search-transport');
 const HttpDocument = require('./knowledge-http-document-transport');
 const ProductionVerifier = require('./knowledge-production-claim-verifier');
 const OpenAIAdapter = require('./knowledge-openai-claim-verifier');
+const OpenAIQueryPlanner = require('./knowledge-openai-query-planner');
+const ClaimPreparation = require('./knowledge-claim-preparation');
+const QueryUnderstanding = require('./knowledge-query-understanding');
 
 const BODY_LIMIT_BYTES = 256 * 1024;
 const REQUEST_TIMEOUT_MS = 15 * 1000;
@@ -92,6 +95,21 @@ function validateVerify(body) {
   return null;
 }
 
+function validatePlan(body) {
+  if (!isObject(body) || typeof body.question !== 'string' || !body.question.trim() || !isObject(body.understanding)) return 'INVALID_REQUEST';
+  const understanding = body.understanding;
+  if (understanding.status !== 'open-ended-public' || understanding.accountDataRequired !== false) return 'INVALID_UNDERSTANDING';
+  if (typeof understanding.normalizedQuestion !== 'string' || !QueryUnderstanding.TOPICS.includes(understanding.topic) || !QueryUnderstanding.INTENTS.includes(understanding.intent) || !QueryUnderstanding.TIME_SENSITIVITY.includes(understanding.timeSensitivity)) return 'INVALID_UNDERSTANDING';
+  if (!Array.isArray(understanding.marketplaces) || understanding.marketplaces.some(value => !['US', 'CA', 'MX', 'UK', 'DE', 'FR', 'IT', 'ES', 'NL', 'SE', 'PL', 'BE', 'AU', 'JP'].includes(value))) return 'INVALID_UNDERSTANDING';
+  if (!Array.isArray(understanding.regions) || understanding.regions.some(value => !['EU', 'GLOBAL'].includes(value))) return 'INVALID_UNDERSTANDING';
+  if (!Array.isArray(understanding.ambiguities) || typeof understanding.confidence !== 'string' || !isObject(understanding.metadata)) return 'INVALID_UNDERSTANDING';
+  return null;
+}
+
+function plannerFailure(errorCode) {
+  return { status: 'unsupported', claims: [], ambiguities: [], confidence: 'low', metadata: { errorCode } };
+}
+
 function readJson(request) {
   return new Promise((resolve, reject) => {
     let size = 0;
@@ -148,8 +166,10 @@ function createAppServer(options = {}) {
   const searchTransport = options.searchTransport;
   const documentTransport = options.documentTransport;
   const claimVerifier = options.claimVerifier;
+  const claimPreparation = options.claimPreparation;
   Transports.assertTransportConfiguration(searchTransport, documentTransport);
   if (claimVerifier !== undefined && (!claimVerifier || typeof claimVerifier.verify !== 'function')) throw Error('INVALID_CLAIM_VERIFIER');
+  if (claimPreparation !== undefined && (!claimPreparation || typeof claimPreparation.prepareClaimsFromUnderstanding !== 'function')) throw Error('INVALID_CLAIM_PREPARATION');
 
   function log(request, statusCode, startedAt, requestId) {
     if (logger) logger({ method: request.method, path: new URL(request.url, 'http://localhost').pathname, requestId: requestIdOf(requestId), statusCode, durationMs: Date.now() - startedAt });
@@ -174,7 +194,7 @@ function createAppServer(options = {}) {
       sendError(request, response, startedAt, code === 'REQUEST_TOO_LARGE' ? 413 : 400, null, code, code === 'REQUEST_TOO_LARGE' ? 'Request body is too large.' : 'Request body must be valid JSON.');
       return;
     }
-    if (!['/api/knowledge/search', '/api/knowledge/document', '/api/knowledge/verify'].includes(pathname)) {
+    if (!['/api/knowledge/search', '/api/knowledge/document', '/api/knowledge/verify', '/api/knowledge/plan'].includes(pathname)) {
       sendError(request, response, startedAt, 404, body && body.requestId, 'API_NOT_FOUND', 'Knowledge API endpoint was not found.');
       return;
     }
@@ -183,11 +203,24 @@ function createAppServer(options = {}) {
     if (pathname === '/api/knowledge/search') validationError = validateSearch(body);
     if (pathname === '/api/knowledge/document') validationError = validateDocument(body);
     if (pathname === '/api/knowledge/verify') validationError = validateVerify(body);
+    if (pathname === '/api/knowledge/plan') validationError = validatePlan(body);
     if (validationError) {
       sendError(request, response, startedAt, 400, requestId, validationError, 'Request does not satisfy the knowledge runtime contract.');
       return;
     }
-    if (pathname === '/api/knowledge/search') {
+    if (pathname === '/api/knowledge/plan') {
+      let output;
+      if (!claimPreparation) output = plannerFailure('PLANNER_NOT_CONFIGURED');
+      else {
+        try {
+          const execution = await Transports.runWithTimeout(signal => claimPreparation.prepareClaimsFromUnderstanding({ question: body.question, understanding: body.understanding, signal }), REQUEST_TIMEOUT_MS);
+          output = execution.timedOut ? plannerFailure('PLANNER_TIMEOUT') : execution.value;
+          if (output && output.status === 'unsupported' && output.metadata && output.metadata.reason === 'PLANNER_FAILED') output = plannerFailure('PLANNER_FAILED');
+          if (!output || !ClaimPreparation.PREPARED_CLAIM_STATUSES.includes(output.status) || !Array.isArray(output.claims) || !Array.isArray(output.ambiguities) || typeof output.confidence !== 'string' || !isObject(output.metadata)) output = plannerFailure('PLANNER_INVALID_RESPONSE');
+        } catch (_) { output = plannerFailure('PLANNER_UNAVAILABLE'); }
+      }
+      sendJson(response, 200, { requestId, ...output });
+    } else if (pathname === '/api/knowledge/search') {
       let output;
       if (!searchTransport) output = { status: 'unavailable', results: [], errorCode: 'SEARCH_TRANSPORT_NOT_CONFIGURED', errorMessage: 'Search transport is not configured.' };
       else {
@@ -313,7 +346,7 @@ function createProductionDocumentTransport(options = {}) {
 function createProductionClaimVerifier(env, options = {}) {
   const apiKey = env && typeof env.OPENAI_API_KEY === 'string' ? env.OPENAI_API_KEY.trim() : '';
   const fetchImpl = options.fetchImpl;
-  if (!apiKey || (fetchImpl === undefined && typeof globalThis.fetch !== 'function')) return undefined;
+  if (!apiKey || (fetchImpl === undefined && typeof globalThis.fetch !== 'function') || (fetchImpl !== undefined && typeof fetchImpl !== 'function')) return undefined;
   const adapter = OpenAIAdapter.createOpenAIClaimVerifierAdapter({
     apiKey,
     ...(fetchImpl === undefined ? {} : { fetchImpl })
@@ -321,8 +354,16 @@ function createProductionClaimVerifier(env, options = {}) {
   return ProductionVerifier.createProductionClaimVerifier({ verifyImpl: adapter.verifyImpl });
 }
 
+function createProductionClaimPreparation(env, options = {}) {
+  const apiKey = env && typeof env.OPENAI_API_KEY === 'string' ? env.OPENAI_API_KEY.trim() : '';
+  const fetchImpl = options.fetchImpl;
+  if (!apiKey || (fetchImpl === undefined && typeof globalThis.fetch !== 'function') || (fetchImpl !== undefined && typeof fetchImpl !== 'function')) return undefined;
+  const adapter = OpenAIQueryPlanner.createOpenAIQueryPlanner({ apiKey, ...(fetchImpl === undefined ? {} : { fetchImpl }) });
+  return ClaimPreparation.createClaimPreparation({ plannerImpl: adapter.plannerImpl });
+}
+
 function createProductionServerOptions(options = {}) {
-  const { env = process.env, fetchImpl, endpoint, documentFetchImpl, openAIFetchImpl, documentTransportOptions = {}, ...serverOptions } = options;
+  const { env = process.env, fetchImpl, endpoint, documentFetchImpl, openAIFetchImpl, openAIPlannerFetchImpl, documentTransportOptions = {}, ...serverOptions } = options;
   return {
     ...serverOptions,
     searchTransport: serverOptions.searchTransport === undefined
@@ -333,16 +374,20 @@ function createProductionServerOptions(options = {}) {
       : serverOptions.documentTransport,
     claimVerifier: serverOptions.claimVerifier === undefined
       ? createProductionClaimVerifier(env, openAIFetchImpl === undefined ? {} : { fetchImpl: openAIFetchImpl })
-      : serverOptions.claimVerifier
+      : serverOptions.claimVerifier,
+    claimPreparation: serverOptions.claimPreparation === undefined
+      ? createProductionClaimPreparation(env, openAIPlannerFetchImpl === undefined ? {} : { fetchImpl: openAIPlannerFetchImpl })
+      : serverOptions.claimPreparation
   };
 }
 
-module.exports = { BODY_LIMIT_BYTES, REQUEST_TIMEOUT_MS, DEFAULT_HOST, DEFAULT_PORT, MVP_PAIRS, createAppServer, startServer, createProductionSearchTransport, createProductionDocumentTransport, createProductionClaimVerifier, createProductionServerOptions };
+module.exports = { BODY_LIMIT_BYTES, REQUEST_TIMEOUT_MS, DEFAULT_HOST, DEFAULT_PORT, MVP_PAIRS, createAppServer, startServer, createProductionSearchTransport, createProductionDocumentTransport, createProductionClaimVerifier, createProductionClaimPreparation, createProductionServerOptions };
 
 if (require.main === module) {
   const options = createProductionServerOptions();
   process.stdout.write(`Knowledge search provider: ${options.searchTransport ? 'configured' : 'not configured'}\n`);
   process.stdout.write(`Knowledge claim verifier: ${options.claimVerifier ? 'configured' : 'not configured'}\n`);
+  process.stdout.write(`Knowledge query planner: ${options.claimPreparation ? 'configured' : 'not configured'}\n`);
   startServer(options).then(() => {
     process.stdout.write(`Amazon Workbench server running at http://${DEFAULT_HOST}:${DEFAULT_PORT}\n`);
   }).catch(() => {
