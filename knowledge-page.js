@@ -75,7 +75,9 @@
     if (!result) return;
     const resultRoot = element('div', 'knowledge-result');
     const answer = result.answer || {};
-    const state = element('p', `knowledge-status status-${result.status}`, statusLabels[result.status] || '查询状态');
+    const retrievalResults = result.retrieval && Array.isArray(result.retrieval.results) ? result.retrieval.results : [];
+    const serviceUnavailable = retrievalResults.length > 0 && retrievalResults.every(item => item && ['unavailable', 'error'].includes(item.status));
+    const state = element('p', `knowledge-status status-${serviceUnavailable ? 'error' : result.status}`, serviceUnavailable ? '知识查询服务当前不可用，请稍后再试。' : (statusLabels[result.status] || '查询状态'));
     state.setAttribute('aria-live', 'polite');
     resultRoot.append(state);
     if (answer.shortAnswer) resultRoot.append(element('section', 'knowledge-summary', answer.shortAnswer));
@@ -174,6 +176,10 @@
     if (preparation.status === 'ambiguous') {
       statusMessage('这个问题可能对应多个知识主题，请选择更具体的问题。', 'blocked');
       showCandidates(preparation.candidates || []);
+      return;
+    }
+    if (page.options.runtimeStatus === 'unavailable') {
+      statusMessage('知识查询服务当前不可用，请稍后再试。', 'error');
       return;
     }
     if (!page.queryDependencies || typeof page.executeKnowledgeQuery !== 'function') {

@@ -173,6 +173,13 @@ async function run() {
   await find(host, 'button').trigger('click');
   assert.match(find(host, '.knowledge-status').textContent, /运行环境尚未准备完成/);
 
+  Page.mount(host, { templateRegistry: registry(), runtimeStatus: 'unavailable', prepareKnowledgeQuery: Preparation.prepareKnowledgeQuery });
+  find(host, 'textarea').value = '英国站 SIPP 现在有什么要求？';
+  await find(host, 'button').trigger('click');
+  assert.equal(find(host, '.knowledge-status').textContent, '知识查询服务当前不可用，请稍后再试。');
+  Page.renderResult({ queryId: 'pages-404', status: 'blocked', retrieval: { results: [{ status: 'unavailable' }] }, answer: { officialFacts: [], derivedConclusions: [], operationalAdvice: [], accountSpecificFindings: [], conflictNotes: [], limitations: [], citations: [] } });
+  assert.match(text(host), /知识查询服务当前不可用，请稍后再试/);
+
   let firstResolve;
   const delayed = new Promise(resolve => { firstResolve = resolve; });
   let invocation = 0;
@@ -204,6 +211,7 @@ async function run() {
   assert.match(workbench, /即将推出/);
   assert.match(html, /knowledge-query-preparation\.js/);
   assert.match(html, /knowledge-query-orchestrator\.js/);
+  assert.match(html, /knowledge-browser-runtime\.js/);
   assert.match(html, /knowledge-page\.js/);
   console.log('knowledge page passed');
 }

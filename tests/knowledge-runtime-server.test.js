@@ -7,6 +7,8 @@ const path = require('node:path');
 const Server = require('../server');
 const Brave = require('../knowledge-brave-search-transport');
 const HttpDocument = require('../knowledge-http-document-transport');
+const OpenAIAdapter = require('../knowledge-openai-claim-verifier');
+const ProductionVerifier = require('../knowledge-production-claim-verifier');
 
 function request(address, method, pathname, body) {
   return new Promise((resolve, reject) => {
@@ -62,6 +64,7 @@ function validClaim() {
 async function run() {
   assert.equal(typeof Server.createProductionSearchTransport, 'function');
   assert.equal(typeof Server.createProductionDocumentTransport, 'function');
+  assert.equal(typeof Server.createProductionClaimVerifier, 'function');
   assert.equal(typeof Server.createProductionServerOptions, 'function');
   const emptyEnvironments = [{}, { BRAVE_SEARCH_API_KEY: '' }, { BRAVE_SEARCH_API_KEY: '   ' }];
   for (const env of emptyEnvironments) {
@@ -69,23 +72,38 @@ async function run() {
     assert.equal(Server.createProductionSearchTransport(env, { fetchImpl: async () => providerResponse(200, {}) }), undefined);
     assert.deepEqual(env, snapshot);
   }
-  const productionEnv = { BRAVE_SEARCH_API_KEY: '  test-production-key  ' };
+  const emptyVerifierEnvironments = [{}, { OPENAI_API_KEY: '' }, { OPENAI_API_KEY: '   ' }];
+  for (const env of emptyVerifierEnvironments) {
+    const snapshot = structuredClone(env);
+    assert.equal(Server.createProductionClaimVerifier(env, { fetchImpl: async () => providerResponse(200, {}) }), undefined);
+    assert.deepEqual(env, snapshot);
+  }
+  const productionEnv = { BRAVE_SEARCH_API_KEY: '  test-production-key  ', OPENAI_API_KEY: '  test-openai-key  ' };
   const productionEnvSnapshot = structuredClone(productionEnv);
   const productionFetchCalls = [];
+  const productionOpenAIFetchCalls = [];
   const productionOptions = Server.createProductionServerOptions({
     env: productionEnv,
     fetchImpl: async (url, options) => {
       productionFetchCalls.push({ url, options });
       return providerResponse(200, { web: { results: [{ title: 'Configured search', url: 'https://sellercentral.amazon.com/help/configured', description: 'official result' }] } });
+    },
+    openAIFetchImpl: async (url, options) => {
+      productionOpenAIFetchCalls.push({ url, options });
+      return providerResponse(200, { output: [{ content: [{ type: 'output_text', text: JSON.stringify({ status: 'supports', supportStrength: 'direct', excerpt: 'official definition', rationale: 'direct evidence', verifierType: 'ignored', metadata: {} }) }] }] });
     }
   });
   assert.equal(typeof productionOptions.searchTransport.search, 'function');
+  assert.equal(typeof productionOptions.documentTransport.fetchDocument, 'function');
+  assert.equal(typeof productionOptions.claimVerifier.verify, 'function');
+  assert.equal(productionOpenAIFetchCalls.length, 0);
   assert.deepEqual(productionEnv, productionEnvSnapshot);
   const originalFetch = globalThis.fetch;
   try {
     globalThis.fetch = undefined;
     assert.equal(Server.createProductionSearchTransport({ BRAVE_SEARCH_API_KEY: 'configured' }), undefined);
     assert.equal(Server.createProductionDocumentTransport(), undefined);
+    assert.equal(Server.createProductionClaimVerifier({ OPENAI_API_KEY: 'configured' }), undefined);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -171,7 +189,7 @@ async function run() {
     assert.deepEqual(Object.keys(lastLog).sort(), ['durationMs', 'method', 'path', 'requestId', 'statusCode']);
     assert.equal(JSON.stringify(logs).includes('<sensitive query>'), false);
     const source = fs.readFileSync(require.resolve('../server'), 'utf8');
-    assert.doesNotMatch(source, /require\(['"](?:node:)?https['"]\)|\bfetch\s*\(|axios|openai|anthropic|gemini|embedding/i);
+    assert.doesNotMatch(source, /require\(['"](?:node:)?https['"]\)|\bfetch\s*\(|axios|require\(['"]openai['"]\)|anthropic|gemini|embedding/i);
     assert.equal(fs.existsSync(path.join(__dirname, '..', '.env')), false);
     assert.doesNotMatch(response.text, /server\.js|C:\\|\//i);
   } finally {
@@ -185,18 +203,57 @@ async function run() {
   });
   const productionAddress = await productionApp.start();
   try {
-    const response = await request(productionAddress, 'POST', '/api/knowledge/search', searchRequest({ requestId: 'configured-search' }));
+    let response = await request(productionAddress, 'POST', '/api/knowledge/search', searchRequest({ requestId: 'configured-search' }));
     assert.equal(response.json.status, 'ok');
     assert.equal(response.json.errorCode, null);
     assert.equal(response.json.results[0].url, 'https://sellercentral.amazon.com/help/configured');
     assert.equal(productionFetchCalls.length, 1);
     assert.equal(productionFetchCalls[0].options.headers['X-Subscription-Token'], 'test-production-key');
     assert.equal(JSON.stringify(response.json).includes('test-production-key'), false);
+    response = await request(productionAddress, 'POST', '/api/knowledge/verify', {
+      requestId: 'configured-openai-verify',
+      claim: validClaim(),
+      candidate: { candidateId: 'configured-openai-candidate', claimId: 'vine', retrievalItemId: 'configured-openai-item', sourceId: 'amazon-seller-help', providerId: 'amazon-seller-help-provider', url: 'https://sellercentral.amazon.com/help/vine', externalId: null, content: 'Vine Pre-Launch official definition.', excerpt: 'official definition' },
+      context: {}
+    });
+    assert.deepEqual([response.statusCode, response.json.status, response.json.supportStrength], [200, 'supports', 'direct']);
+    assert.equal(productionOpenAIFetchCalls.length, 1);
+    assert.equal(JSON.stringify(response.json).includes('test-openai-key'), false);
   } finally {
     await productionApp.close();
   }
+  for (const outcome of [401, 429, 503, 'abort']) {
+    const claimVerifier = Server.createProductionClaimVerifier(
+      { OPENAI_API_KEY: 'invalid-test-key' },
+      {
+        fetchImpl: async () => {
+          if (outcome === 'abort') {
+            const error = Error('aborted');
+            error.name = 'AbortError';
+            throw error;
+          }
+          return providerResponse(outcome, {});
+        }
+      }
+    );
+    const errorApp = Server.createAppServer({ rootDir: path.join(__dirname, '..'), host: '127.0.0.1', port: 0, claimVerifier });
+    const errorAddress = await errorApp.start();
+    try {
+      const response = await request(errorAddress, 'POST', '/api/knowledge/verify', {
+        requestId: `openai-${outcome}`,
+        claim: validClaim(),
+        candidate: { candidateId: `candidate-${outcome}`, claimId: 'vine', retrievalItemId: `item-${outcome}`, sourceId: 'amazon-seller-help', providerId: 'amazon-seller-help-provider', url: 'https://sellercentral.amazon.com/help/vine', externalId: null, content: 'Vine Pre-Launch official definition.', excerpt: 'official definition' },
+        context: {}
+      });
+      assert.deepEqual([response.statusCode, response.json.status, response.json.metadata.errorCode], [200, 'unknown', 'CLAIM_VERIFIER_ERROR']);
+      assert.equal(JSON.stringify(response.json).includes('invalid-test-key'), false);
+    } finally {
+      await errorApp.close();
+    }
+  }
   const noKeyOptions = Server.createProductionServerOptions({ env: {}, fetchImpl: async () => providerResponse(200, {}) });
   assert.equal(noKeyOptions.searchTransport, undefined);
+  assert.equal(noKeyOptions.claimVerifier, undefined);
   const productionDocumentCalls = [];
   const productionDocumentOptions = Server.createProductionServerOptions({
     env: {},
@@ -259,6 +316,7 @@ async function run() {
   const browserFiles = ['index.html', 'knowledge-page.js', 'workbench.js'];
   for (const fileName of browserFiles) {
     assert.equal(fs.readFileSync(path.join(__dirname, '..', fileName), 'utf8').includes('BRAVE_SEARCH_API_KEY'), false);
+    assert.equal(fs.readFileSync(path.join(__dirname, '..', fileName), 'utf8').includes('OPENAI_API_KEY'), false);
   }
   assert.match(fs.readFileSync(require.resolve('../server'), 'utf8'), /if \(require\.main === module\)/);
   assert.throws(() => Server.createAppServer({ searchTransport: null }), /INVALID_SEARCH_TRANSPORT/);
@@ -327,6 +385,34 @@ async function run() {
     assert.equal(verifierCalls.length, 5);
   } finally {
     await verifierApp.close();
+  }
+  const openAiVerifierCalls = [];
+  const openAiAdapter = OpenAIAdapter.createOpenAIClaimVerifierAdapter({
+    apiKey: 'test-secret',
+    fetchImpl: async (url, options) => {
+      openAiVerifierCalls.push({ url, options });
+      return providerResponse(200, { output: [{ content: [{ type: 'output_text', text: JSON.stringify({ status: 'supports', supportStrength: 'direct', excerpt: 'official definition', rationale: 'direct evidence', verifierType: 'ignored', metadata: {} }) }] }] });
+    }
+  });
+  const openAiApp = Server.createAppServer({
+    rootDir: path.join(__dirname, '..'),
+    host: '127.0.0.1',
+    port: 0,
+    claimVerifier: ProductionVerifier.createProductionClaimVerifier({ verifyImpl: openAiAdapter.verifyImpl })
+  });
+  const openAiAddress = await openAiApp.start();
+  try {
+    const response = await request(openAiAddress, 'POST', '/api/knowledge/verify', {
+      requestId: 'verify-openai-adapter',
+      claim: validClaim(),
+      candidate: { candidateId: 'candidate-openai', claimId: 'vine', retrievalItemId: 'item-openai', sourceId: 'amazon-seller-help', providerId: 'amazon-seller-help-provider', url: 'https://sellercentral.amazon.com/help/vine', externalId: null, content: 'Vine Pre-Launch official definition.', excerpt: 'official definition' },
+      context: {}
+    });
+    assert.deepEqual([response.statusCode, response.json.status, response.json.supportStrength], [200, 'supports', 'direct']);
+    assert.equal(openAiVerifierCalls.length, 1);
+    assert.equal(JSON.stringify(response.json).includes('test-secret'), false);
+  } finally {
+    await openAiApp.close();
   }
   const braveCalls = [];
   let braveStatus = 200;

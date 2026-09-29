@@ -31,6 +31,10 @@
 
   const calculator = document.querySelector('.app-shell');
   const calculatorFooter = document.querySelector('body > footer');
+  const knowledgeRuntime = window.KnowledgeBrowserRuntime && typeof window.KnowledgeBrowserRuntime.createBrowserKnowledgeRuntime === 'function'
+    ? window.KnowledgeBrowserRuntime.createBrowserKnowledgeRuntime()
+    : null;
+  if (knowledgeRuntime) window.KnowledgeQueryRuntime = knowledgeRuntime;
   const shell = document.createElement('div');
   shell.className = 'workbench-shell';
   shell.innerHTML = `
@@ -144,7 +148,7 @@
       knowledgeHost.id = 'knowledgeModule';
       knowledgeHost.className = 'route-page';
       view.prepend(knowledgeHost);
-      window.KnowledgePage.mount(knowledgeHost, window.KnowledgeQueryRuntime || {});
+      window.KnowledgePage.mount(knowledgeHost, knowledgeRuntime || {});
     }
     else if (route.type !== 'profit') view.insertAdjacentHTML('afterbegin', placeholderMarkup(route));
     closeMenu();

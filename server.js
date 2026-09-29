@@ -11,6 +11,7 @@ const SearchCoordinator = require('./knowledge-search-coordinator');
 const Brave = require('./knowledge-brave-search-transport');
 const HttpDocument = require('./knowledge-http-document-transport');
 const ProductionVerifier = require('./knowledge-production-claim-verifier');
+const OpenAIAdapter = require('./knowledge-openai-claim-verifier');
 
 const BODY_LIMIT_BYTES = 256 * 1024;
 const REQUEST_TIMEOUT_MS = 15 * 1000;
@@ -309,8 +310,19 @@ function createProductionDocumentTransport(options = {}) {
   return HttpDocument.createHttpDocumentTransport(options);
 }
 
+function createProductionClaimVerifier(env, options = {}) {
+  const apiKey = env && typeof env.OPENAI_API_KEY === 'string' ? env.OPENAI_API_KEY.trim() : '';
+  const fetchImpl = options.fetchImpl;
+  if (!apiKey || (fetchImpl === undefined && typeof globalThis.fetch !== 'function')) return undefined;
+  const adapter = OpenAIAdapter.createOpenAIClaimVerifierAdapter({
+    apiKey,
+    ...(fetchImpl === undefined ? {} : { fetchImpl })
+  });
+  return ProductionVerifier.createProductionClaimVerifier({ verifyImpl: adapter.verifyImpl });
+}
+
 function createProductionServerOptions(options = {}) {
-  const { env = process.env, fetchImpl, endpoint, documentFetchImpl, documentTransportOptions = {}, ...serverOptions } = options;
+  const { env = process.env, fetchImpl, endpoint, documentFetchImpl, openAIFetchImpl, documentTransportOptions = {}, ...serverOptions } = options;
   return {
     ...serverOptions,
     searchTransport: serverOptions.searchTransport === undefined
@@ -318,15 +330,19 @@ function createProductionServerOptions(options = {}) {
       : serverOptions.searchTransport,
     documentTransport: serverOptions.documentTransport === undefined
       ? createProductionDocumentTransport({ ...documentTransportOptions, ...(documentFetchImpl === undefined ? {} : { fetchImpl: documentFetchImpl }) })
-      : serverOptions.documentTransport
+      : serverOptions.documentTransport,
+    claimVerifier: serverOptions.claimVerifier === undefined
+      ? createProductionClaimVerifier(env, openAIFetchImpl === undefined ? {} : { fetchImpl: openAIFetchImpl })
+      : serverOptions.claimVerifier
   };
 }
 
-module.exports = { BODY_LIMIT_BYTES, REQUEST_TIMEOUT_MS, DEFAULT_HOST, DEFAULT_PORT, MVP_PAIRS, createAppServer, startServer, createProductionSearchTransport, createProductionDocumentTransport, createProductionServerOptions };
+module.exports = { BODY_LIMIT_BYTES, REQUEST_TIMEOUT_MS, DEFAULT_HOST, DEFAULT_PORT, MVP_PAIRS, createAppServer, startServer, createProductionSearchTransport, createProductionDocumentTransport, createProductionClaimVerifier, createProductionServerOptions };
 
 if (require.main === module) {
   const options = createProductionServerOptions();
   process.stdout.write(`Knowledge search provider: ${options.searchTransport ? 'configured' : 'not configured'}\n`);
+  process.stdout.write(`Knowledge claim verifier: ${options.claimVerifier ? 'configured' : 'not configured'}\n`);
   startServer(options).then(() => {
     process.stdout.write(`Amazon Workbench server running at http://${DEFAULT_HOST}:${DEFAULT_PORT}\n`);
   }).catch(() => {
