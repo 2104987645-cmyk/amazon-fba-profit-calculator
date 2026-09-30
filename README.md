@@ -10,6 +10,10 @@ node server.js
 
 Optional environment variables are `HOST`, `PORT`, `SEARXNG_BASE_URL`, `DEEPSEEK_API_KEY`, `OPENAI_API_KEY`, and `BRAVE_SEARCH_API_KEY`. The server defaults to `HOST=0.0.0.0` and `PORT=8000` for CLI production startup. Set `SEARXNG_BASE_URL` to an internal URL such as `http://searxng:8080`; search selects SearXNG first, then Brave when configured. Knowledge planning and claim verification select DeepSeek first, then OpenAI as a startup fallback, otherwise remain unavailable. Do not place API keys in browser assets or commit a `.env` file. GitHub Pages remains a static preview; its `/api/knowledge/*` endpoints are not available without the Node same-origin runtime.
 
+### Railway private SearXNG
+
+The Railway project `rare-rejoicing` can run `amazon-seller-workbench` and a private `searxng` service. Deploy the latter from the repository's `searxng` root directory; its container listens on port `8080`. Configure the workbench service only with `SEARXNG_BASE_URL=http://searxng.railway.internal:8080`. This is a server-side private-network address, never a browser or public URL. Search selection is `SEARXNG_BASE_URL` → SearXNG, otherwise `BRAVE_SEARCH_API_KEY` → Brave, otherwise unavailable.
+
 ## Auto News Update V1
 
 `#/news` 现已包含独立的“待审核情报”区域。GitHub Actions 每天按北京时间 08:00、14:00、20:00 检查 Amazon Sell 官方公告、Amazon News Small Business 与 Amazon Ads 新闻中心。抓取结果只写入 `data/incoming-news.json`，不会自动进入正式 `news-data.js`，也不会触发 Dashboard / Action Center。
