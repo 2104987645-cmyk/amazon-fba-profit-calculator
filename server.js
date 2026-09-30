@@ -10,6 +10,7 @@ const Claims = require('./knowledge-claim-contracts');
 const Transports = require('./knowledge-runtime-transports');
 const SearchCoordinator = require('./knowledge-search-coordinator');
 const Brave = require('./knowledge-brave-search-transport');
+const SearXNG = require('./knowledge-searxng-search-transport');
 const HttpDocument = require('./knowledge-http-document-transport');
 const ProductionVerifier = require('./knowledge-production-claim-verifier');
 const OpenAIAdapter = require('./knowledge-openai-claim-verifier');
@@ -441,9 +442,12 @@ function startServer(options) {
 }
 
 function createProductionSearchTransport(env, options = {}) {
+  const searxngBaseUrl = env && typeof env.SEARXNG_BASE_URL === 'string' ? env.SEARXNG_BASE_URL.trim() : '';
   const apiKey = env && typeof env.BRAVE_SEARCH_API_KEY === 'string' ? env.BRAVE_SEARCH_API_KEY.trim() : '';
   const fetchImpl = options.fetchImpl;
-  if (!apiKey || (fetchImpl === undefined && typeof globalThis.fetch !== 'function')) return undefined;
+  if ((fetchImpl === undefined && typeof globalThis.fetch !== 'function') || (fetchImpl !== undefined && typeof fetchImpl !== 'function')) return undefined;
+  if (searxngBaseUrl) return SearXNG.createSearXNGSearchTransport({ baseUrl: searxngBaseUrl, ...(fetchImpl === undefined ? {} : { fetchImpl }) });
+  if (!apiKey) return undefined;
   return Brave.createBraveSearchTransport({
     apiKey,
     ...(fetchImpl === undefined ? {} : { fetchImpl }),
@@ -485,11 +489,11 @@ function createProductionClaimPreparation(env, options = {}) {
 }
 
 function createProductionServerOptions(options = {}) {
-  const { env = process.env, fetchImpl, endpoint, documentFetchImpl, openAIFetchImpl, openAIPlannerFetchImpl, deepSeekFetchImpl, deepSeekPlannerFetchImpl, documentTransportOptions = {}, ...serverOptions } = options;
+  const { env = process.env, fetchImpl, endpoint, searxngFetchImpl, documentFetchImpl, openAIFetchImpl, openAIPlannerFetchImpl, deepSeekFetchImpl, deepSeekPlannerFetchImpl, documentTransportOptions = {}, ...serverOptions } = options;
   return {
     ...serverOptions,
     searchTransport: serverOptions.searchTransport === undefined
-      ? createProductionSearchTransport(env, { fetchImpl, endpoint })
+      ? createProductionSearchTransport(env, { fetchImpl: (env && typeof env.SEARXNG_BASE_URL === 'string' && env.SEARXNG_BASE_URL.trim()) ? (searxngFetchImpl === undefined ? fetchImpl : searxngFetchImpl) : fetchImpl, endpoint })
       : serverOptions.searchTransport,
     documentTransport: serverOptions.documentTransport === undefined
       ? createProductionDocumentTransport({ ...documentTransportOptions, ...(documentFetchImpl === undefined ? {} : { fetchImpl: documentFetchImpl }) })

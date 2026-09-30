@@ -75,6 +75,14 @@ async function run() {
     assert.equal(Server.createProductionSearchTransport(env, { fetchImpl: async () => providerResponse(200, {}) }), undefined);
     assert.deepEqual(env, snapshot);
   }
+  let searxngCalls = 0;
+  const searxngOnly = Server.createProductionServerOptions({ env: { SEARXNG_BASE_URL: 'http://searxng:8080' }, searxngFetchImpl: async url => { searxngCalls += 1; assert.match(url, /^http:\/\/searxng:8080\/search\?/); return providerResponse(200, { results: [] }); } });
+  assert.equal(typeof searxngOnly.searchTransport.search, 'function');
+  assert.equal(searxngCalls, 0);
+  assert.equal((await searxngOnly.searchTransport.search(searchRequest(), {})).status, 'empty');
+  assert.equal(searxngCalls, 1);
+  const searxngPreferred = Server.createProductionServerOptions({ env: { SEARXNG_BASE_URL: 'https://searxng.example', BRAVE_SEARCH_API_KEY: 'brave-not-used' }, searxngFetchImpl: async () => providerResponse(200, { results: [] }) });
+  assert.equal((await searxngPreferred.searchTransport.search(searchRequest(), {})).status, 'empty');
   const emptyVerifierEnvironments = [{}, { OPENAI_API_KEY: '' }, { OPENAI_API_KEY: '   ' }];
   for (const env of emptyVerifierEnvironments) {
     const snapshot = structuredClone(env);
