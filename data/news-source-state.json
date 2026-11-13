@@ -13,8 +13,8 @@
   },
   "amazon-ads-newsroom": {
     "lastSuccessAt": "2026-09-24T16:27:30.323Z",
-    "lastFailureAt": "2026-11-12T14:34:52.920Z",
-    "failureCount": 16,
+    "lastFailureAt": "2026-11-13T04:57:07.423Z",
+    "failureCount": 17,
     "lastError": "页面未发现符合规则的官方内容链接"
   }
 }
